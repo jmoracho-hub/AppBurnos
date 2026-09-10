@@ -261,7 +261,12 @@
   }
   function initials(name) {
     const parts = (name || '?').trim().split(/\s+/);
-    return ((parts[0] || '?')[0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+    // Nombre y apellido -> una letra de cada uno (p.ej. "Juan Carlos" -> "JC").
+    if (parts[1]) return ((parts[0][0] || '?') + (parts[1][0] || '')).toUpperCase();
+    // Un solo nombre -> dos primeras letras, para que "Alberto" y "Agustín" no
+    // se vean con el mismo avatar "A" y se puedan distinguir de un vistazo.
+    const w = parts[0] || '?';
+    return (w.length > 1 ? w.slice(0, 2) : w).toUpperCase();
   }
   function parseISODate(iso) {
     const [y, m, d] = iso.split('-').map(Number);
