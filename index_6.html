@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appburnos Cuadrilla</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg: oklch(97% 0.014 75);
+    --surface: oklch(99% 0.005 75);
+    --surface-2: oklch(94% 0.016 70);
+    --border: oklch(88% 0.014 70);
+    --text: oklch(22% 0.02 55);
+    --text-muted: oklch(50% 0.02 58);
+    --accent: oklch(63% 0.16 45);
+    --accent-strong: oklch(46% 0.13 45);
+    --accent-soft: oklch(93% 0.045 50);
+    --success: oklch(58% 0.12 150);
+    --success-strong: oklch(40% 0.1 150);
+    --success-soft: oklch(92% 0.035 150);
+    --shadow: oklch(40% 0.05 55 / 0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: oklch(19% 0.014 55);
+      --surface: oklch(24% 0.016 55);
+      --surface-2: oklch(29% 0.018 55);
+      --border: oklch(34% 0.02 55);
+      --text: oklch(94% 0.01 70);
+      --text-muted: oklch(68% 0.02 65);
+      --accent: oklch(72% 0.15 45);
+      --accent-strong: oklch(84% 0.11 45);
+      --accent-soft: oklch(32% 0.05 45);
+      --success: oklch(68% 0.11 150);
+      --success-strong: oklch(80% 0.09 150);
+      --success-soft: oklch(30% 0.05 150);
+      --shadow: oklch(0% 0 0 / 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: oklch(19% 0.014 55);
+    --surface: oklch(24% 0.016 55);
+    --surface-2: oklch(29% 0.018 55);
+    --border: oklch(34% 0.02 55);
+    --text: oklch(94% 0.01 70);
+    --text-muted: oklch(68% 0.02 65);
+    --accent: oklch(72% 0.15 45);
+    --accent-strong: oklch(84% 0.11 45);
+    --accent-soft: oklch(32% 0.05 45);
+    --success: oklch(68% 0.11 150);
+    --success-strong: oklch(80% 0.09 150);
+    --success-soft: oklch(30% 0.05 150);
+    --shadow: oklch(0% 0 0 / 0.35);
+  }
+  html, body { background: var(--bg); }
+  body {
+    margin: 0; font-family: 'Manrope', system-ui, sans-serif; color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-strong); }
+  a:hover { color: var(--accent); }
+  h1, h2, h3, .display { font-family: 'Space Grotesk', system-ui, sans-serif; }
+  button, input, textarea, select { font-family: inherit; color: inherit; }
+  input, textarea, select { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 11px 13px; font-size: 14px; width: 100%; }
+  input:focus, textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { cursor: pointer; }
+
+  #app-shell {
+    max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--bg);
+    display: flex; flex-direction: column; position: relative;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 20px 12px; gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700; font-size: 15px; flex-shrink: 0;
+  }
+  .brand-name { font-size: 18px; font-weight: 700; }
+  .me-avatar {
+    width: 38px; height: 38px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; border: none;
+    flex-shrink: 0;
+  }
+  .backbtn, .iconbtn {
+    width: 36px; height: 36px; border-radius: 999px; background: var(--surface-2); border: none;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text);
+  }
+  .content { flex: 1; padding: 4px 20px 110px; display: flex; flex-direction: column; gap: 16px; }
+  .section-label { font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-muted); margin: 8px 2px 0; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 15px;
+    display: flex; flex-direction: column; gap: 11px; text-align: left; width: 100%; box-shadow: 0 1px 2px var(--shadow);
+  }
+  .card-top { display: flex; gap: 12px; align-items: flex-start; }
+  .type-icon {
+    width: 40px; height: 40px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-strong);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .type-icon.success { background: var(--success-soft); color: var(--success-strong); }
+  .card-title { font-size: 15.5px; font-weight: 700; line-height: 1.25; }
+  .card-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+  .badge { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+  .badge-pending { background: var(--accent-soft); color: var(--accent-strong); }
+  .badge-confirmed { background: var(--success-soft); color: var(--success-strong); }
+  .progress-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+  .progress-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; margin-top: 6px; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; }
+  .avatar-stack { display: flex; }
+  .avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; border: 2px solid var(--surface); margin-left: -8px; flex-shrink: 0; }
+  .avatar-stack .avatar:first-child { margin-left: 0; }
+  .avatar.lg { width: 34px; height: 34px; font-size: 12.5px; }
+  .meta-text { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+  .confirmed-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--success-strong); }
+  .icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  .fab {
+    position: fixed; right: max(20px, calc((100vw - 480px) / 2 + 20px)); bottom: 92px; width: 56px; height: 56px;
+    border-radius: 999px; background: var(--accent); color: white; border: none; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 10px 22px -6px var(--shadow); z-index: 6;
+  }
+  .bottomnav {
+    position: sticky; bottom: 0; left: 0; right: 0; background: var(--surface);
+    border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-around;
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom)); z-index: 5;
+  }
+  .navitem { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-muted); background: none; border: none; padding: 4px 14px; }
+  .navitem.active { color: var(--accent-strong); }
+  .navitem span { font-size: 10.5px; font-weight: 700; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 48px 20px; color: var(--text-muted); }
+  .empty-state .icon-big { width: 46px; height: 46px; stroke: var(--border); stroke-width: 1.4; }
+  .empty-state h3 { margin: 0; font-size: 17px; color: var(--text); }
+  .empty-state p { margin: 0; font-size: 13.5px; max-width: 260px; line-height: 1.5; }
+
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .label { font-size: 12.5px; font-weight: 700; color: var(--text-muted); }
+  .chiprow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--border); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); background: var(--surface); display: flex; align-items: center; gap: 6px; }
+  .chip.selected { background: var(--accent); border-color: var(--accent); color: white; }
+  .datechip { padding: 8px 8px 8px 14px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong);
+    font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; border: none; }
+  .datechip .x { width: 18px; height: 18px; border-radius: 999px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+  .adddate { padding: 9px 14px; border-radius: 999px; border: 1.5px dashed var(--border); font-size: 13px;
+    font-weight: 700; color: var(--accent-strong); display: flex; align-items: center; gap: 6px; background: transparent; }
+  .footer-bar { position: sticky; bottom: 0; background: var(--bg); padding: 14px 20px calc(20px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); margin: 0 -20px; }
+  .primary-btn { width: 100%; padding: 14px; border-radius: 14px; background: var(--accent); color: white; border: none;
+    font-size: 14.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .primary-btn:disabled { opacity: 0.5; }
+  .ghost-btn { padding: 10px 16px; border-radius: 12px; background: var(--surface-2); border: none; font-size: 13px;
+    font-weight: 700; color: var(--text); display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+  .infolist { display: flex; flex-direction: column; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; }
+  .inforow { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-muted); font-weight: 600; }
+  .inforow b { color: var(--text); font-weight: 700; }
+  .desc { font-size: 13.5px; line-height: 1.55; color: var(--text-muted); }
+
+  .date-option { background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .date-option.leading { border-color: var(--accent); background: var(--accent-soft); }
+  .date-option-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .date-option-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .date-box { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); color: var(--text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+  .date-option.leading .date-box { background: var(--accent); color: white; }
+  .date-box small { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .date-day { font-size: 13.5px; font-weight: 700; }
+  .date-votes { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+  .vote-buttons { display: flex; gap: 6px; flex-shrink: 0; }
+  .vote-btn { width: 32px; height: 32px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .vote-btn.yes-selected { background: var(--success); border-color: var(--success); color: white; }
+  .vote-btn.no-selected { background: var(--surface-2); border-color: var(--text-muted); color: var(--text); }
+  .vote-btn.quiza-selected { background: var(--surface-2); border-color: var(--text-muted); color: var(--text); }
+
+  .expenserow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; }
+  .itin-item { display: flex; align-items: flex-start; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 13px; }
+  .itin-badge { flex-shrink: 0; min-width: 58px; font-size: 11px; font-weight: 700; color: var(--accent-strong); background: var(--accent-soft); border-radius: 999px; padding: 5px 9px; text-align: center; line-height: 1.3; }
+  .itin-desc { font-size: 13.5px; font-weight: 600; color: var(--text); padding-top: 2px; }
+  .exp-title { font-size: 14px; font-weight: 700; }
+  .exp-sub { font-size: 11.5px; color: var(--text-muted); font-weight: 600; margin-top: 1px; }
+  .exp-amount { font-size: 14.5px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .totalcard { background: var(--accent); color: white; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 3px; }
+  .totalcard .lbl { font-size: 11.5px; font-weight: 700; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.03em; }
+  .totalcard .amount { font-size: 30px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .totalcard .sub { font-size: 12.5px; opacity: 0.9; font-weight: 600; }
+  .balancerow { display: flex; align-items: center; gap: 12px; }
+  .balance-name { font-size: 14px; font-weight: 700; flex: 1; }
+  .balance-amount { font-size: 14px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .balance-amount.positive { color: var(--success-strong); }
+  .balance-amount.negative { color: var(--accent-strong); }
+  .balance-amount.zero { color: var(--text-muted); }
+  .settlecard { background: var(--surface-2); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .settlerow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .settlerow .muted { color: var(--text-muted); font-weight: 600; }
+
+  .checklist { display: flex; flex-direction: column; gap: 8px; }
+  .checkrow { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; padding: 3px 0; }
+  .checkbox { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .checkbox.checked { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .segctrl { display: flex; background: var(--surface-2); border-radius: 12px; padding: 4px; }
+  .segitem { flex: 1; text-align: center; padding: 8px; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--text-muted); background: none; border: none; }
+  .segitem.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
+  .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .weekday { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--text-muted); padding-bottom: 4px; }
+  .day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12.5px;
+    font-weight: 600; color: var(--text); border-radius: 12px; gap: 3px; position: relative; background: none; border: none; }
+  .day.muted { color: var(--border); }
+  .day.today { border: 1.5px solid var(--accent-strong); font-weight: 700; }
+  .dot { width: 5px; height: 5px; border-radius: 999px; background: var(--accent); }
+  .dot.success { background: var(--success); }
+  .monthnav { display: flex; align-items: center; justify-content: space-between; }
+  .monthlabel { font-size: 14.5px; font-weight: 700; }
+
+  .onboard-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 28px; gap: 22px; text-align: center; max-width: 420px; margin: 0 auto; }
+  .onboard-wrap .brand-mark { width: 56px; height: 56px; border-radius: 16px; font-size: 22px; }
+  .onboard-wrap h1 { font-size: 24px; margin: 0; }
+  .onboard-wrap p { margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+  .onboard-form { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+
+  .modal-overlay { position: fixed; inset: 0; background: oklch(20% 0.02 55 / 0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+  .modal-sheet { width: 100%; max-width: 480px; background: var(--bg); border-radius: 22px 22px 0 0; max-height: 88vh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+
+  ::selection { background: var(--accent-soft); }
+  @media (prefers-reduced-motion: no-preference) {
+    .card, .fab { transition: transform 0.12s ease; }
+    .card:active { transform: scale(0.99); }
+    .fab:active { transform: scale(0.94); }
+  }
+</style>
+</head>
+<body>
+
+<div id="app-shell"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- utils ----------
+  function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+  function money(n) { return round2(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function uid(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function slugify(str) {
+    return (str || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || uid('p');
+  }
+  function initials(name) {
+    const parts = (name || '?').trim().split(/\s+/);
+    return ((parts[0] || '?')[0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+  }
+  function parseISODate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function formatDateShort(iso) {
+    try { return parseISODate(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
+    catch (e) { return iso; }
+  }
+  function formatDateLong(iso) {
+    try { return parseISODate(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }); }
+    catch (e) { return iso; }
+  }
+  function dateBoxParts(iso) {
+    const d = parseISODate(iso);
+    return { day: d.getDate(), mon: d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') };
+  }
+  function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+  const TIPOS = [
+    { id: 'viaje', label: 'Viaje', icon: 'plane' },
+    { id: 'casa-rural', label: 'Casa rural', icon: 'house' },
+    { id: 'cena', label: 'Cena', icon: 'utensils' },
+    { id: 'comida', label: 'Comida', icon: 'utensils' },
+    { id: 'cumple', label: 'Cumpleaños', icon: 'cake' },
+    { id: 'otro', label: 'Otro', icon: 'star' },
+  ];
+  const TIPO_OTRO = TIPOS[TIPOS.length - 1];
+  function tipoLabel(id) { return (TIPOS.find(t => t.id === id) || TIPO_OTRO).label; }
+  function tipoIconId(id) { return (TIPOS.find(t => t.id === id) || TIPO_OTRO).icon; }
+
+  function icon(name, opts) {
+    opts = opts || {};
+    const size = opts.size || 20;
+    const paths = {
+      plane: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+      house: '<path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>',
+      utensils: '<path d="M3 2v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3zm0 0v7"/>',
+      cake: '<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16.5s.9-1 2.4-1 2 1 3.6 1 2.1-1 3.6-1 2.4 1 2.4 1"/><path d="M12 4v3.2"/><circle cx="12" cy="3.4" r="0.9" fill="currentColor" stroke="none"/>',
+      star: '<path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 16.9 6.4 20.1l1.4-6.3-4.8-4.3 6.4-.6z"/>',
+      home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+      calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+      wallet: '<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-5"/><circle cx="17" cy="13" r="1.4" fill="currentColor" stroke="none"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>',
+      check: '<path d="M20 6L9 17l-5-5"/>',
+      x: '<path d="M18 6L6 18M6 6l12 12"/>',
+      chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
+      chevronRight: '<path d="M9 18l6-6-6-6"/>',
+      link: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M15.5 5.2a3.2 3.2 0 0 1 0 6.1"/><path d="M17.5 14.6c2.6.5 4.5 2.4 4.5 5.4"/>',
+      mappin: '<path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+      dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+      question: '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+      party: '<path d="M4 21c0-4 4-6 8-6s8 2 8 6"/><circle cx="12" cy="8" r="4"/>',
+      arrowright: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    };
+    return '<svg class="icon" viewBox="0 0 24 24" style="width:' + size + 'px;height:' + size + 'px' + (opts.style ? ';' + opts.style : '') + '">' + (paths[name] || paths.star) + '</svg>';
+  }
+
+  // ---------- state ----------
+  let db = null;
+  let me = null; // { id, nombre }
+  let miembros = {}; // id -> { nombre }
+  let planes = {}; // id -> plan
+  let view = 'loading'; // loading | onboarding | home | calendar | gastos | detail | newplan
+  let currentPlanId = null;
+  let monthOffset = 0;
+  let showGastoForm = false;
+  let showItinerarioForm = false;
+  let onboardError = '';
+
+  const formDraft = { tipo: 'casa-rural', titulo: '', descripcion: '', sitio: '', precio: '', fechas: [] };
+  const gastoDraft = { descripcion: '', pagadoPor: '', importe: '', paraQuienes: [] };
+  const itinerarioDraft = { dia: 1, hora: '', descripcion: '' };
+
+  function sortItinerario(items) {
+    return (items || []).slice().sort(function (a, b) {
+      if (a.dia !== b.dia) return a.dia - b.dia;
+      return (a.hora || '').localeCompare(b.hora || '');
+    });
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem('kuadrilla-me') || 'null');
+    if (saved && saved.id && saved.nombre) me = saved;
+  } catch (e) { /* ignore */ }
+
+  function totalMiembros() { return Math.max(1, Object.keys(miembros).length); }
+
+  function votosEmitidos(plan) { return Object.keys(plan.votos || {}).length; }
+
+  function siCount(plan, fechaId) {
+    let n = 0;
+    Object.values(plan.votos || {}).forEach(v => { if (v && v[fechaId] === 'si') n++; });
+    return n;
+  }
+
+  function leadingFechaId(plan) {
+    let best = null, bestCount = -1;
+    (plan.fechas || []).forEach(f => {
+      const c = siCount(plan, f.id);
+      if (c > bestCount) { bestCount = c; best = f.id; }
+    });
+    return best;
+  }
+
+  function nombreDe(id) { return (miembros[id] && miembros[id].nombre) || 'alguien'; }
+
+  function computeBalances(plan) {
+    const paid = {}, share = {};
+    const people = new Set(plan.apuntados || []);
+    (plan.gastos || []).forEach(g => {
+      paid[g.pagadoPor] = (paid[g.pagadoPor] || 0) + g.importe;
+      people.add(g.pagadoPor);
+      const n = (g.paraQuienes && g.paraQuienes.length) || 1;
+      const per = g.importe / n;
+      (g.paraQuienes || []).forEach(pid => { share[pid] = (share[pid] || 0) + per; people.add(pid); });
+    });
+    const balances = {};
+    people.forEach(pid => { balances[pid] = round2((paid[pid] || 0) - (share[pid] || 0)); });
+    return balances;
+  }
+
+  function computeSettlements(balances) {
+    const debtors = Object.entries(balances).filter(([, v]) => v < -0.004).map(([id, v]) => [id, -v]).sort((a, b) => b[1] - a[1]);
+    const creditors = Object.entries(balances).filter(([, v]) => v > 0.004).map(([id, v]) => [id, v]).sort((a, b) => b[1] - a[1]);
+    const settlements = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const amount = round2(Math.min(debtors[i][1], creditors[j][1]));
+      if (amount > 0) settlements.push({ from: debtors[i][0], to: creditors[j][0], amount });
+      debtors[i][1] = round2(debtors[i][1] - amount);
+      creditors[j][1] = round2(creditors[j][1] - amount);
+      if (debtors[i][1] <= 0.004) i++;
+      if (creditors[j][1] <= 0.004) j++;
+    }
+    return settlements;
+  }
+
+  function totalGasto(plan) { return round2((plan.gastos || []).reduce((s, g) => s + g.importe, 0)); }
+
+  // ---------- db wiring ----------
+  // ---------- Firebase (sustituye a la base de datos de Claude) ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCo58ogKoRX_XbckRW1myWZK-j2-7xotUg",
+    authDomain: "appburnos-cuadrilla.firebaseapp.com",
+    projectId: "appburnos-cuadrilla",
+    storageBucket: "appburnos-cuadrilla.firebasestorage.app",
+    messagingSenderId: "861192270688",
+    appId: "1:861192270688:web:97ee53893ac59911416405",
+  };
+
+  function wrapFirestoreDoc(ref) {
+    return {
+      id: ref.id,
+      path: ref.path,
+      get: function () { return ref.get().then(function (snap) { return { id: snap.id, exists: snap.exists, data: function () { return snap.data(); } }; }); },
+      set: function (data) { return ref.set(data); },
+      // Firestore's .update() replaces nested objects wholesale; .set(data,{merge:true})
+      // merges nested objects recursively, which is the behaviour the rest of this app relies on
+      // (e.g. one person's vote must not wipe out everyone else's under the same "votos" field).
+      update: function (data) { return ref.set(data, { merge: true }); },
+      onSnapshot: function (next, error) {
+        return ref.onSnapshot(function (snap) { next({ id: snap.id, exists: snap.exists, data: function () { return snap.data(); } }); }, error);
+      },
+    };
+  }
+  function wrapFirestoreCollection(ref) {
+    const api = {
+      path: ref.path,
+      doc: function (id) { return wrapFirestoreDoc(id ? ref.doc(id) : ref.doc()); },
+      add: function (data) { return ref.add(data).then(wrapFirestoreDoc); },
+      orderBy: function (field, dir) { return wrapFirestoreCollection(ref.orderBy(field, dir || 'asc')); },
+      where: function (field, op, value) { return wrapFirestoreCollection(ref.where(field, op, value)); },
+      limit: function (n) { return wrapFirestoreCollection(ref.limit(n)); },
+      onSnapshot: function (next, error) {
+        return ref.onSnapshot(function (snap) {
+          next({
+            docs: snap.docs.map(function (d) { return { id: d.id, exists: true, data: function () { return d.data(); } }; }),
+            size: snap.size, empty: snap.empty, docChanges: function () { return []; },
+          });
+        }, error);
+      },
+    };
+    return api;
+  }
+  function makeFirebaseDb() {
+    const app = firebase.initializeApp(firebaseConfig);
+    const firestore = firebase.firestore(app);
+    return {
+      doc: function (path) { return wrapFirestoreDoc(firestore.doc(path)); },
+      collection: function (path) { return wrapFirestoreCollection(firestore.collection(path)); },
+    };
+  }
+
+  async function boot() {
+    try {
+      db = makeFirebaseDb();
+    } catch (e) { db = null; }
+    if (!db) {
+      view = 'nodb';
+      render();
+      return;
+    }
+    db.collection('miembros').onSnapshot(function (snap) {
+      const next = {};
+      snap.docs.forEach(function (d) { next[d.id] = d.data(); });
+      miembros = next;
+      render();
+    }, function () { /* degrade quietly */ });
+
+    db.collection('planes').orderBy('creadoEn', 'desc').onSnapshot(function (snap) {
+      const next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      planes = next;
+      if (currentPlanId && !planes[currentPlanId] && view === 'detail') { view = 'home'; currentPlanId = null; }
+      render();
+    }, function () { /* degrade quietly */ });
+
+    view = me ? 'home' : 'onboarding';
+    render();
+  }
+
+  function saveMemberIfNeeded() {
+    if (!me || !db) return;
+    db.collection('miembros').doc(me.id).set({ nombre: me.nombre, actualizado: Date.now() }).catch(function () {});
+  }
+
+  // ---------- actions ----------
+  function submitOnboarding(nombre) {
+    nombre = (nombre || '').trim();
+    if (!nombre) { onboardError = 'Escribe tu nombre para continuar.'; render(); return; }
+    const id = slugify(nombre);
+    me = { id: id, nombre: nombre };
+    try { localStorage.setItem('kuadrilla-me', JSON.stringify(me)); } catch (e) {}
+    saveMemberIfNeeded();
+    onboardError = '';
+    view = 'home';
+    render();
+  }
+
+  function goTo(v) { view = v; window.scrollTo(0, 0); render(); }
+
+  function openPlan(id) { currentPlanId = id; showGastoForm = false; showItinerarioForm = false; view = 'detail'; window.scrollTo(0, 0); render(); }
+
+  function openNewPlan() {
+    formDraft.tipo = 'casa-rural'; formDraft.titulo = ''; formDraft.descripcion = '';
+    formDraft.sitio = ''; formDraft.precio = ''; formDraft.fechas = [];
+    view = 'newplan'; window.scrollTo(0, 0); render();
+  }
+
+  function selectTipo(id) { formDraft.tipo = id; render(); }
+
+  function addFecha() {
+    const el = document.getElementById('fecha-input');
+    if (!el || !el.value) return;
+    if (!formDraft.fechas.some(function (f) { return f === el.value; })) formDraft.fechas.push(el.value);
+    formDraft.fechas.sort();
+    el.value = '';
+    render();
+  }
+  function removeFecha(iso) { formDraft.fechas = formDraft.fechas.filter(function (f) { return f !== iso; }); render(); }
+
+  function readFormField(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+  function publicarPlan() {
+    const titulo = readFormField('f-titulo').trim();
+    const descripcion = readFormField('f-descripcion').trim();
+    const sitio = readFormField('f-sitio').trim();
+    const precio = parseFloat(readFormField('f-precio')) || 0;
+    if (!titulo || formDraft.fechas.length === 0 || !db) return;
+    const fechas = formDraft.fechas.map(function (iso) { return { id: uid('f'), fecha: iso }; });
+    const plan = {
+      tipo: formDraft.tipo, titulo: titulo, descripcion: descripcion, sitio: sitio, precio: precio,
+      fechas: fechas, votos: {}, apuntados: [me.id], estado: 'votando', fechaConfirmadaId: null,
+      gastos: [], itinerario: [], creadoPor: me.id, creadoEn: Date.now(),
+    };
+    db.collection('planes').add(plan).then(function (ref) { openPlan(ref.id); });
+  }
+
+  function setVote(planId, fechaId, valor) {
+    if (!db || !me) return;
+    const patch = { votos: {} };
+    patch.votos[me.id] = {};
+    patch.votos[me.id][fechaId] = valor;
+    db.doc('planes/' + planId).update(patch).catch(function () {});
+  }
+
+  function toggleApuntado(plan) {
+    if (!db || !me) return;
+    const set = new Set(plan.apuntados || []);
+    if (set.has(me.id)) set.delete(me.id); else set.add(me.id);
+    db.doc('planes/' + plan.id).update({ apuntados: Array.from(set) }).catch(function () {});
+  }
+
+  function cerrarVotacion(plan) {
+    if (!db) return;
+    const fid = leadingFechaId(plan);
+    if (!fid) return;
+    db.doc('planes/' + plan.id).update({ estado: 'confirmado', fechaConfirmadaId: fid }).catch(function () {});
+  }
+
+  function reabrirVotacion(plan) {
+    if (!db) return;
+    db.doc('planes/' + plan.id).update({ estado: 'votando', fechaConfirmadaId: null }).catch(function () {});
+  }
+
+  function openGastoForm(plan) {
+    gastoDraft.descripcion = ''; gastoDraft.pagadoPor = me ? me.id : ''; gastoDraft.importe = '';
+    gastoDraft.paraQuienes = (plan.apuntados || []).slice();
+    showGastoForm = true; render();
+  }
+  function closeGastoForm() { showGastoForm = false; render(); }
+  function toggleParaQuien(pid) {
+    const i = gastoDraft.paraQuienes.indexOf(pid);
+    if (i >= 0) gastoDraft.paraQuienes.splice(i, 1); else gastoDraft.paraQuienes.push(pid);
+    render();
+  }
+  function guardarGasto(plan) {
+    const descripcion = readFormField('g-descripcion').trim();
+    const importe = parseFloat(readFormField('g-importe'));
+    const pagadoPor = readFormField('g-pagador');
+    if (!descripcion || !importe || importe <= 0 || !pagadoPor || gastoDraft.paraQuienes.length === 0 || !db) return;
+    const gasto = { id: uid('g'), descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
+    const nuevos = (plan.gastos || []).concat([gasto]);
+    db.doc('planes/' + plan.id).update({ gastos: nuevos }).then(function () { showGastoForm = false; render(); });
+  }
+
+  function openItinerarioForm(plan) {
+    const maxDia = (plan.itinerario || []).reduce(function (m, it) { return Math.max(m, it.dia || 1); }, 0);
+    itinerarioDraft.dia = Math.max(1, maxDia); itinerarioDraft.hora = ''; itinerarioDraft.descripcion = '';
+    showItinerarioForm = true; render();
+  }
+  function closeItinerarioForm() { showItinerarioForm = false; render(); }
+  function guardarItinerarioItem(plan) {
+    const dia = parseInt(readFormField('it-dia'), 10);
+    const hora = readFormField('it-hora');
+    const descripcion = readFormField('it-descripcion').trim();
+    if (!dia || dia < 1 || !descripcion || !db) return;
+    const item = { id: uid('i'), dia: dia, hora: hora, descripcion: descripcion };
+    const nuevos = (plan.itinerario || []).concat([item]);
+    db.doc('planes/' + plan.id).update({ itinerario: nuevos }).then(function () { showItinerarioForm = false; render(); });
+  }
+  function eliminarItinerarioItem(plan, itemId) {
+    if (!db) return;
+    const nuevos = (plan.itinerario || []).filter(function (it) { return it.id !== itemId; });
+    db.doc('planes/' + plan.id).update({ itinerario: nuevos }).catch(function () {});
+  }
+
+  function cambiarNombre() {
+    const nuevo = window.prompt('¿Cómo te llamas?', me ? me.nombre : '');
+    if (nuevo && nuevo.trim()) {
+      me = { id: slugify(nuevo.trim()), nombre: nuevo.trim() };
+      try { localStorage.setItem('kuadrilla-me', JSON.stringify(me)); } catch (e) {}
+      saveMemberIfNeeded();
+      render();
+    }
+  }
+
+  // ---------- render helpers ----------
+  function avatarStack(ids, max) {
+    max = max || 4;
+    const shown = ids.slice(0, max);
+    let html = '<div class="avatar-stack">';
+    shown.forEach(function (id) { html += '<div class="avatar">' + esc(initials(nombreDe(id))) + '</div>'; });
+    if (ids.length > max) html += '<div class="avatar">+' + (ids.length - max) + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function planCard(plan) {
+    const total = totalMiembros();
+    const emitidos = votosEmitidos(plan);
+    const pct = Math.round((emitidos / total) * 100);
+    const isConfirmado = plan.estado === 'confirmado';
+    let footer = '';
+    if (isConfirmado) {
+      const fecha = (plan.fechas || []).find(function (f) { return f.id === plan.fechaConfirmadaId; });
+      footer = '<div class="confirmed-row">' + icon('check', { size: 15 }) + (fecha ? formatDateLong(fecha.fecha) : 'Fecha confirmada') + '</div>' +
+        '<div class="card-footer">' + avatarStack(plan.apuntados || []) + '<div class="meta-text">' + (plan.apuntados || []).length + ' apuntados</div></div>';
+    } else {
+      footer = '<div><div class="progress-track"><div class="progress-fill" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+        '<div class="progress-label">' + emitidos + ' de ' + total + ' han votado</div></div>' +
+        '<div class="card-footer">' + avatarStack(plan.apuntados || []) + '</div>';
+    }
+    return '<button class="card" onclick="KApp.openPlan(\'' + plan.id + '\')">' +
+      '<div class="card-top">' +
+      '<div class="type-icon' + (isConfirmado ? ' success' : '') + '">' + icon(tipoIconId(plan.tipo), { size: 20 }) + '</div>' +
+      '<div style="flex:1; min-width:0; text-align:left">' +
+      '<div class="card-title">' + esc(plan.titulo) + '</div>' +
+      '<div class="card-sub">Propuesto por ' + esc(nombreDe(plan.creadoPor)) + '</div>' +
+      '</div>' +
+      '<div class="badge ' + (isConfirmado ? 'badge-confirmed' : 'badge-pending') + '">' + (isConfirmado ? 'Confirmado' : 'Vota ya') + '</div>' +
+      '</div>' + footer + '</button>';
+  }
+
+  function renderTopbar(title, opts) {
+    opts = opts || {};
+    if (opts.back) {
+      return '<div class="topbar"><button class="backbtn" onclick="KApp.goTo(\'' + opts.back + '\')">' + icon('chevronLeft', { size: 18 }) + '</button>' +
+        '<div class="brand-name display" style="flex:1">' + esc(title) + '</div>' +
+        (opts.right || '<div style="width:36px"></div>') + '</div>';
+    }
+    return '<div class="topbar">' +
+      '<div class="brand"><div class="brand-mark display">AC</div><div class="brand-name display">' + esc(title) + '</div></div>' +
+      '<button class="me-avatar" onclick="KApp.cambiarNombre()" title="Cambiar nombre">' + esc(initials(me ? me.nombre : '?')) + '</button>' +
+      '</div>';
+  }
+
+  function renderBottomNav(active) {
+    function item(id, label, iconName) {
+      return '<button class="navitem' + (active === id ? ' active' : '') + '" onclick="KApp.goTo(\'' + id + '\')">' + icon(iconName, { size: 21 }) + '<span>' + label + '</span></button>';
+    }
+    return '<div class="bottomnav">' + item('home', 'Inicio', 'home') + item('calendar', 'Calendario', 'calendar') + item('gastos', 'Gastos', 'wallet') + '</div>';
+  }
+
+  function renderHome() {
+    const list = Object.values(planes).sort(function (a, b) { return (b.creadoEn || 0) - (a.creadoEn || 0); });
+    const activos = list.filter(function (p) { return p.estado !== 'confirmado'; });
+    const confirmados = list.filter(function (p) { return p.estado === 'confirmado'; });
+    let html = renderTopbar('Appburnos Cuadrilla');
+    html += '<div class="content">';
+    if (list.length === 0) {
+      html += '<div class="empty-state">' + icon('party', { size: 46, style: 'width:46px;height:46px;stroke:var(--border)' }) +
+        '<h3>Aún no hay planes</h3><p>Propón el primero: una casa rural, una cena, lo que sea. La cuadrilla vota la fecha y listo.</p></div>';
+    } else {
+      if (activos.length) {
+        html += '<div class="section-label">Planes activos</div>';
+        activos.forEach(function (p) { html += planCard(p); });
+      }
+      if (confirmados.length) {
+        html += '<div class="section-label">Confirmados</div>';
+        confirmados.forEach(function (p) { html += planCard(p); });
+      }
+    }
+    html += '</div>';
+    html += '<button class="fab" onclick="KApp.openNewPlan()">' + icon('plus', { size: 24, style: 'stroke:white' }) + '</button>';
+    html += renderBottomNav('home');
+    return html;
+  }
+
+  function renderNewPlan() {
+    let html = renderTopbar('Nuevo plan', { back: 'home' });
+    html += '<div class="content">';
+    html += '<div class="field"><div class="label">Tipo de plan</div><div class="chiprow">';
+    TIPOS.forEach(function (t) {
+      html += '<button type="button" class="chip' + (formDraft.tipo === t.id ? ' selected' : '') + '" onclick="KApp.selectTipo(\'' + t.id + '\')">' + esc(t.label) + '</button>';
+    });
+    html += '</div></div>';
+    html += '<div class="field"><div class="label">Título</div><input id="f-titulo" value="' + esc(formDraft.titulo) + '" oninput="KApp.formDraft.titulo=this.value" placeholder="p. ej. Casa rural en el valle" /></div>';
+    html += '<div class="field"><div class="label">Descripción</div><textarea id="f-descripcion" rows="3" oninput="KApp.formDraft.descripcion=this.value" placeholder="Cuenta el plan en dos frases">' + esc(formDraft.descripcion) + '</textarea></div>';
+    html += '<div class="field"><div class="label">Sitio o enlace</div><input id="f-sitio" value="' + esc(formDraft.sitio) + '" oninput="KApp.formDraft.sitio=this.value" placeholder="casaruralelvalle.com" /></div>';
+    html += '<div class="field"><div class="label">Precio aproximado por persona</div><input id="f-precio" type="number" min="0" step="1" value="' + esc(formDraft.precio) + '" oninput="KApp.formDraft.precio=this.value" placeholder="45" /></div>';
+    html += '<div class="field"><div class="label">Fechas candidatas</div><div class="chiprow">';
+    formDraft.fechas.forEach(function (iso) {
+      html += '<div class="datechip">' + formatDateShort(iso) + '<button type="button" class="x" onclick="KApp.removeFecha(\'' + iso + '\')">' + icon('x', { size: 11 }) + '</button></div>';
+    });
+    html += '</div><div style="display:flex; gap:8px; margin-top:2px"><input id="fecha-input" type="date" style="flex:1" />' +
+      '<button type="button" class="adddate" onclick="KApp.addFecha()">' + icon('plus', { size: 14 }) + ' Añadir</button></div></div>';
+    html += '</div>';
+    html += '<div class="footer-bar"><button class="primary-btn" onclick="KApp.publicarPlan()">' + icon('arrowright', { size: 17, style: 'stroke:white' }) + ' Publicar plan</button></div>';
+    return html;
+  }
+
+  function renderDetail() {
+    const plan = planes[currentPlanId];
+    if (!plan) return renderHome();
+    const isConfirmado = plan.estado === 'confirmado';
+    const soyCreador = me && plan.creadoPor === me.id;
+    const apuntado = me && (plan.apuntados || []).includes(me.id);
+    let html = renderTopbar(plan.titulo, { back: 'home' });
+    html += '<div class="content">';
+    html += '<div class="infolist">';
+    if (plan.sitio) html += '<div class="inforow">' + icon('link', { size: 16 }) + '<b>' + esc(plan.sitio) + '</b></div>';
+    if (plan.precio) html += '<div class="inforow">' + icon('clock', { size: 16 }) + '≈ <b>' + money(plan.precio) + '</b> por persona</div>';
+    html += '<div class="inforow">' + icon('users', { size: 16 }) + 'Propuesto por <b>' + esc(nombreDe(plan.creadoPor)) + '</b></div>';
+    html += '</div>';
+    if (plan.descripcion) html += '<div class="desc">' + esc(plan.descripcion) + '</div>';
+
+    if (!isConfirmado) {
+      html += '<div class="section-label">¿Qué fecha os viene mejor?</div>';
+      const leadId = leadingFechaId(plan);
+      (plan.fechas || []).forEach(function (f) {
+        const parts = dateBoxParts(f.fecha);
+        const count = siCount(plan, f.id);
+        const total = totalMiembros();
+        const myVote = me && plan.votos && plan.votos[me.id] ? plan.votos[me.id][f.id] : null;
+        const leading = f.id === leadId && count > 0;
+        html += '<div class="date-option' + (leading ? ' leading' : '') + '">' +
+          '<div class="date-option-top">' +
+          '<div class="date-option-left"><div class="date-box">' + parts.day + '<small>' + esc(parts.mon) + '</small></div>' +
+          '<div><div class="date-day">' + esc(formatDateLong(f.fecha)) + '</div><div class="date-votes">' + count + ' de ' + total + ' disponibles</div></div></div>' +
+          '<div class="vote-buttons">' +
+          '<button class="vote-btn' + (myVote === 'si' ? ' yes-selected' : '') + '" onclick="KApp.setVote(\'' + plan.id + '\',\'' + f.id + '\',\'si\')">' + icon('check', { size: 16 }) + '</button>' +
+          '<button class="vote-btn' + (myVote === 'quiza' ? ' quiza-selected' : '') + '" onclick="KApp.setVote(\'' + plan.id + '\',\'' + f.id + '\',\'quiza\')">' + icon('question', { size: 16 }) + '</button>' +
+          '<button class="vote-btn' + (myVote === 'no' ? ' no-selected' : '') + '" onclick="KApp.setVote(\'' + plan.id + '\',\'' + f.id + '\',\'no\')">' + icon('x', { size: 16 }) + '</button>' +
+          '</div></div></div>';
+      });
+      html += '<div style="display:flex; gap:10px">';
+      html += '<button class="ghost-btn" style="flex:1" onclick="KApp.toggleApuntado(planes[\'' + plan.id + '\'])">' + icon(apuntado ? 'check' : 'plus', { size: 15 }) + (apuntado ? ' Te apuntas' : ' Apuntarme') + '</button>';
+      if (soyCreador) html += '<button class="ghost-btn" style="flex:1; background:var(--accent); color:white" onclick="KApp.cerrarVotacion(planes[\'' + plan.id + '\'])">' + icon('check', { size: 15, style: 'stroke:white' }) + ' Confirmar fecha</button>';
+      html += '</div>';
+    } else {
+      const fecha = (plan.fechas || []).find(function (f) { return f.id === plan.fechaConfirmadaId; });
+      html += '<div class="card" style="cursor:default">' +
+        '<div class="confirmed-row">' + icon('check', { size: 16 }) + (fecha ? formatDateLong(fecha.fecha) : '') + '</div>' +
+        '<div style="display:flex; gap:10px">';
+      html += '<button class="ghost-btn" style="flex:1" onclick="KApp.toggleApuntado(planes[\'' + plan.id + '\'])">' + icon(apuntado ? 'check' : 'plus', { size: 15 }) + (apuntado ? ' Te apuntas' : ' Apuntarme') + '</button>';
+      if (soyCreador) html += '<button class="ghost-btn" style="flex:1" onclick="KApp.reabrirVotacion(planes[\'' + plan.id + '\'])">Reabrir votación</button>';
+      html += '</div></div>';
+    }
+
+    html += '<div class="section-label">Apuntados (' + (plan.apuntados || []).length + ')</div>' + avatarStack(plan.apuntados || [], 8);
+
+    html += '<div class="section-label" style="display:flex; align-items:center; justify-content:space-between">Itinerario<button class="ghost-btn" style="padding:6px 12px" onclick="KApp.openItinerarioForm(planes[\'' + plan.id + '\'])">' + icon('plus', { size: 13 }) + ' Añadir</button></div>';
+    const itinerario = sortItinerario(plan.itinerario);
+    if (itinerario.length === 0) {
+      html += '<div class="meta-text" style="padding:4px 2px">Aún no hay itinerario. Añade el primer punto.</div>';
+    } else {
+      itinerario.forEach(function (it) {
+        html += '<div class="itin-item"><div class="itin-badge">Día ' + it.dia + (it.hora ? '<br>' + esc(it.hora) : '') + '</div>' +
+          '<div class="itin-desc" style="flex:1">' + esc(it.descripcion) + '</div>' +
+          '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" onclick="KApp.eliminarItinerarioItem(planes[\'' + plan.id + '\'],\'' + it.id + '\')">' + icon('x', { size: 13 }) + '</button></div>';
+      });
+    }
+
+    if (isConfirmado) {
+      html += '<div class="section-label" style="display:flex; align-items:center; justify-content:space-between">Gastos<button class="ghost-btn" style="padding:6px 12px" onclick="KApp.openGastoForm(planes[\'' + plan.id + '\'])">' + icon('plus', { size: 13 }) + ' Añadir</button></div>';
+      if ((plan.gastos || []).length === 0) {
+        html += '<div class="meta-text" style="padding:4px 2px">Aún no hay gastos apuntados.</div>';
+      } else {
+        (plan.gastos || []).forEach(function (g) {
+          html += '<div class="expenserow"><div class="type-icon">' + icon('wallet', { size: 18 }) + '</div>' +
+            '<div style="flex:1"><div class="exp-title">' + esc(g.descripcion) + '</div>' +
+            '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></div>' +
+            '<div class="exp-amount">' + money(g.importe) + '</div></div>';
+        });
+        const balances = computeBalances(plan);
+        html += '<div class="section-label">Saldos</div><div class="card" style="cursor:default; gap:14px">';
+        Object.keys(balances).forEach(function (pid) {
+          const b = balances[pid];
+          const cls = b > 0.004 ? 'positive' : (b < -0.004 ? 'negative' : 'zero');
+          const label = b > 0.004 ? '+ ' + money(b) : (b < -0.004 ? '− ' + money(-b) : 'Al día');
+          html += '<div class="balancerow"><div class="avatar lg">' + esc(initials(nombreDe(pid))) + '</div>' +
+            '<div class="balance-name">' + esc(nombreDe(pid)) + (me && pid === me.id ? ' (tú)' : '') + '</div>' +
+            '<div class="balance-amount ' + cls + '">' + label + '</div></div>';
+        });
+        html += '</div>';
+        const settlements = computeSettlements(balances);
+        if (settlements.length) {
+          html += '<div class="section-label">Para saldar</div><div class="settlecard">';
+          settlements.forEach(function (s) {
+            html += '<div class="settlerow">' + esc(nombreDe(s.from)) + ' <span class="muted">' + icon('arrowright', { size: 13, style: 'display:inline;vertical-align:-2px' }) + '</span> ' + esc(nombreDe(s.to)) + '<span class="muted" style="margin-left:auto">' + money(s.amount) + '</span></div>';
+          });
+          html += '</div>';
+        }
+      }
+    }
+    html += '</div>';
+
+    if (showGastoForm && isConfirmado) {
+      html += renderGastoModal(plan);
+    }
+    if (showItinerarioForm) {
+      html += renderItinerarioModal(plan);
+    }
+    return html;
+  }
+
+  function renderItinerarioModal(plan) {
+    let html = '<div class="modal-overlay" onclick="if(event.target===this) KApp.closeItinerarioForm()"><div class="modal-sheet"><div class="content" style="padding-top:24px">';
+    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">Añadir al itinerario</div><button class="iconbtn" onclick="KApp.closeItinerarioForm()">' + icon('x', { size: 16 }) + '</button></div>';
+    html += '<div style="display:flex; gap:12px">';
+    html += '<div class="field" style="flex:1"><div class="label">Día</div><input id="it-dia" type="number" min="1" step="1" value="' + esc(itinerarioDraft.dia) + '" oninput="KApp.itinerarioDraft.dia=this.value" /></div>';
+    html += '<div class="field" style="flex:1"><div class="label">Hora (opcional)</div><input id="it-hora" type="time" value="' + esc(itinerarioDraft.hora) + '" oninput="KApp.itinerarioDraft.hora=this.value" /></div>';
+    html += '</div>';
+    html += '<div class="field"><div class="label">¿Qué toca?</div><input id="it-descripcion" value="' + esc(itinerarioDraft.descripcion) + '" oninput="KApp.itinerarioDraft.descripcion=this.value" placeholder="Ruta al mirador, barbacoa, check-in..." /></div>';
+    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarItinerarioItem(planes[\'' + plan.id + '\'])">Guardar</button></div>';
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function renderGastoModal(plan) {
+    let html = '<div class="modal-overlay" onclick="if(event.target===this) KApp.closeGastoForm()"><div class="modal-sheet"><div class="content" style="padding-top:24px">';
+    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">Añadir gasto</div><button class="iconbtn" onclick="KApp.closeGastoForm()">' + icon('x', { size: 16 }) + '</button></div>';
+    html += '<div class="field"><div class="label">Descripción</div><input id="g-descripcion" value="' + esc(gastoDraft.descripcion) + '" oninput="KApp.gastoDraft.descripcion=this.value" placeholder="Alquiler, cena, compra..." /></div>';
+    html += '<div class="field"><div class="label">¿Cuánto?</div><input id="g-importe" type="number" min="0" step="0.01" value="' + esc(gastoDraft.importe) + '" oninput="KApp.gastoDraft.importe=this.value" placeholder="0" /></div>';
+    html += '<div class="field"><div class="label">¿Quién pagó?</div><select id="g-pagador" onchange="KApp.gastoDraft.pagadoPor=this.value">';
+    (plan.apuntados || []).forEach(function (pid) {
+      html += '<option value="' + esc(pid) + '"' + (gastoDraft.pagadoPor === pid ? ' selected' : '') + '>' + esc(nombreDe(pid)) + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div class="field"><div class="label">¿Para quién?</div><div class="checklist">';
+    (plan.apuntados || []).forEach(function (pid) {
+      const checked = gastoDraft.paraQuienes.includes(pid);
+      html += '<div class="checkrow" onclick="KApp.toggleParaQuien(\'' + pid + '\')"><div class="checkbox' + (checked ? ' checked' : '') + '">' + (checked ? icon('check', { size: 13, style: 'stroke:white' }) : '') + '</div>' + esc(nombreDe(pid)) + '</div>';
+    });
+    html += '</div></div>';
+    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarGasto(planes[\'' + plan.id + '\'])">Guardar gasto</button></div>';
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function buildMonthGrid(year, month) {
+    const first = new Date(year, month, 1);
+    const startWeekday = (first.getDay() + 6) % 7; // Monday = 0
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+    const cells = [];
+    for (let i = startWeekday - 1; i >= 0; i--) cells.push({ day: daysInPrev - i, muted: true, date: new Date(year, month - 1, daysInPrev - i) });
+    for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, muted: false, date: new Date(year, month, d) });
+    while (cells.length % 7 !== 0) {
+      const d = cells.length - (startWeekday + daysInMonth) + 1;
+      cells.push({ day: d, muted: true, date: new Date(year, month + 1, d) });
+    }
+    return cells;
+  }
+
+  function renderCalendar() {
+    const now = new Date();
+    const base = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const year = base.getFullYear(), month = base.getMonth();
+    const cells = buildMonthGrid(year, month);
+    const today = new Date();
+
+    const eventsByDay = {}; // 'y-m-d' -> {confirmado:bool, votando:bool}
+    Object.values(planes).forEach(function (p) {
+      if (p.estado === 'confirmado') {
+        const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; });
+        if (f) {
+          const d = parseISODate(f.fecha);
+          const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+          eventsByDay[key] = eventsByDay[key] || {}; eventsByDay[key].confirmado = true;
+        }
+      } else {
+        (p.fechas || []).forEach(function (f) {
+          const d = parseISODate(f.fecha);
+          const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+          eventsByDay[key] = eventsByDay[key] || {}; eventsByDay[key].votando = true;
+        });
+      }
+    });
+
+    let html = renderTopbar('Appburnos Cuadrilla');
+    html += '<div class="content">';
+    html += '<div class="monthnav"><button class="iconbtn" onclick="KApp.monthOffset--; KApp.render()">' + icon('chevronLeft', { size: 16 }) + '</button>' +
+      '<div class="monthlabel">' + base.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) + '</div>' +
+      '<button class="iconbtn" onclick="KApp.monthOffset++; KApp.render()">' + icon('chevronRight', { size: 16 }) + '</button></div>';
+    html += '<div class="grid7">';
+    ['L', 'M', 'X', 'J', 'V', 'S', 'D'].forEach(function (w) { html += '<div class="weekday">' + w + '</div>'; });
+    cells.forEach(function (c) {
+      const key = c.date.getFullYear() + '-' + c.date.getMonth() + '-' + c.date.getDate();
+      const ev = eventsByDay[key];
+      let dot = '';
+      if (ev && ev.confirmado) dot = '<div class="dot success"></div>';
+      else if (ev && ev.votando) dot = '<div class="dot"></div>';
+      html += '<div class="day' + (c.muted ? ' muted' : '') + (sameDay(c.date, today) ? ' today' : '') + '">' + c.day + dot + '</div>';
+    });
+    html += '</div>';
+
+    const list = Object.values(planes).slice().sort(function (a, b) {
+      function keyOf(p) {
+        if (p.estado === 'confirmado') { const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; }); return f ? parseISODate(f.fecha).getTime() : Infinity; }
+        return (p.fechas || []).reduce(function (min, f) { return Math.min(min, parseISODate(f.fecha).getTime()); }, Infinity);
+      }
+      return keyOf(a) - keyOf(b);
+    });
+    html += '<div class="section-label">Próximos planes</div>';
+    if (list.length === 0) {
+      html += '<div class="meta-text" style="padding:4px 2px">Todavía no hay planes en marcha.</div>';
+    } else {
+      list.forEach(function (p) {
+        const isConfirmado = p.estado === 'confirmado';
+        let sub = 'pendiente de votar';
+        if (isConfirmado) { const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; }); sub = (f ? formatDateLong(f.fecha) : '') + ' · Confirmado'; }
+        else if ((p.fechas || []).length) { sub = 'Fecha candidata: ' + formatDateShort((p.fechas || []).slice().sort()[0]); }
+        html += '<button class="expenserow" onclick="KApp.openPlan(\'' + p.id + '\')" style="width:100%; text-align:left">' +
+          '<div class="type-icon' + (isConfirmado ? ' success' : '') + '">' + icon(tipoIconId(p.tipo), { size: 18 }) + '</div>' +
+          '<div style="flex:1"><div class="exp-title">' + esc(p.titulo) + '</div><div class="exp-sub">' + esc(sub) + '</div></div>' + '</button>';
+      });
+    }
+    html += '</div>';
+    html += renderBottomNav('calendar');
+    return html;
+  }
+
+  function renderGastos() {
+    let html = renderTopbar('Appburnos Cuadrilla');
+    html += '<div class="content">';
+    const confirmados = Object.values(planes).filter(function (p) { return p.estado === 'confirmado' && (p.gastos || []).length; });
+    if (confirmados.length === 0) {
+      html += '<div class="empty-state">' + icon('wallet', { size: 46, style: 'width:46px;height:46px;stroke:var(--border)' }) +
+        '<h3>Sin gastos todavía</h3><p>Cuando confirméis un plan y añadáis gastos, aquí verás quién debe qué.</p></div>';
+      html += '</div>' + renderBottomNav('gastos');
+      return html;
+    }
+    let totalMio = 0;
+    confirmados.forEach(function (p) { const b = computeBalances(p); if (me && b[me.id] != null) totalMio += b[me.id]; });
+    totalMio = round2(totalMio);
+    html += '<div class="totalcard"><div class="lbl">Tu balance total</div>' +
+      '<div class="amount">' + (totalMio > 0.004 ? '+ ' : (totalMio < -0.004 ? '− ' : '')) + money(Math.abs(totalMio)) + '</div>' +
+      '<div class="sub">' + (totalMio > 0.004 ? 'Te deben en total' : (totalMio < -0.004 ? 'Debes en total' : 'Estás al día')) + '</div></div>';
+    html += '<div class="section-label">Por plan</div>';
+    confirmados.forEach(function (p) {
+      const b = computeBalances(p);
+      const mine = me ? (b[me.id] || 0) : 0;
+      const cls = mine > 0.004 ? 'positive' : (mine < -0.004 ? 'negative' : 'zero');
+      const label = mine > 0.004 ? '+ ' + money(mine) : (mine < -0.004 ? '− ' + money(-mine) : 'Al día');
+      html += '<button class="expenserow" onclick="KApp.openPlan(\'' + p.id + '\')" style="width:100%; text-align:left">' +
+        '<div class="type-icon success">' + icon(tipoIconId(p.tipo), { size: 18 }) + '</div>' +
+        '<div style="flex:1"><div class="exp-title">' + esc(p.titulo) + '</div><div class="exp-sub">Total ' + money(totalGasto(p)) + '</div></div>' +
+        '<div class="balance-amount ' + cls + '">' + label + '</div></button>';
+    });
+    html += '</div>';
+    html += renderBottomNav('gastos');
+    return html;
+  }
+
+  function renderOnboarding() {
+    return '<div class="onboard-wrap">' +
+      '<div class="brand-mark display">AC</div>' +
+      '<h1 class="display">Appburnos Cuadrilla</h1>' +
+      '<p>Planes, fechas y gastos de la cuadrilla, todo en un sitio. ¿Cómo te llamas para que el resto te reconozca?</p>' +
+      '<div class="onboard-form">' +
+      '<input id="ob-nombre" placeholder="Tu nombre" onkeydown="if(event.key===\'Enter\') KApp.submitOnboarding(this.value)" />' +
+      (onboardError ? '<div style="color:var(--accent-strong); font-size:12.5px; font-weight:600">' + esc(onboardError) + '</div>' : '') +
+      '<button class="primary-btn" onclick="KApp.submitOnboarding(document.getElementById(\'ob-nombre\').value)">Entrar</button>' +
+      '</div></div>';
+  }
+
+  function renderNoDb() {
+    return '<div class="onboard-wrap"><div class="brand-mark display">AC</div><h1 class="display">Appburnos Cuadrilla</h1>' +
+      '<p>Esta vista no puede conectar con el almacenamiento compartido ahora mismo. Prueba a abrir el enlace de nuevo en un momento.</p></div>';
+  }
+
+  function render() {
+    const root = document.getElementById('app-shell');
+    if (!root) return;
+    let html = '';
+    if (view === 'loading') html = '<div class="onboard-wrap"><div class="brand-mark display">AC</div></div>';
+    else if (view === 'nodb') html = renderNoDb();
+    else if (view === 'onboarding') html = renderOnboarding();
+    else if (view === 'newplan') html = renderNewPlan();
+    else if (view === 'detail') html = renderDetail();
+    else if (view === 'calendar') html = renderCalendar();
+    else if (view === 'gastos') html = renderGastos();
+    else html = renderHome();
+    root.innerHTML = html;
+  }
+
+  window.KApp = {
+    goTo: goTo, openPlan: openPlan, openNewPlan: openNewPlan, selectTipo: selectTipo,
+    addFecha: addFecha, removeFecha: removeFecha, publicarPlan: publicarPlan, setVote: setVote,
+    toggleApuntado: toggleApuntado, cerrarVotacion: cerrarVotacion, reabrirVotacion: reabrirVotacion,
+    openGastoForm: openGastoForm, closeGastoForm: closeGastoForm, toggleParaQuien: toggleParaQuien,
+    guardarGasto: guardarGasto, cambiarNombre: cambiarNombre, submitOnboarding: submitOnboarding,
+    openItinerarioForm: openItinerarioForm, closeItinerarioForm: closeItinerarioForm,
+    guardarItinerarioItem: guardarItinerarioItem, eliminarItinerarioItem: eliminarItinerarioItem,
+    formDraft: formDraft, gastoDraft: gastoDraft, itinerarioDraft: itinerarioDraft, render: render,
+    get monthOffset() { return monthOffset; }, set monthOffset(v) { monthOffset = v; },
+  };
+  Object.defineProperty(window, 'planes', { get: function () { return planes; } });
+
+  render();
+  boot();
+})();
+</script>
+</body>
+</html>
