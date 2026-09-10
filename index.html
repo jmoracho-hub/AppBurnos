@@ -225,9 +225,10 @@
   .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
   .weekday { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--text-muted); padding-bottom: 4px; }
   .day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12.5px;
-    font-weight: 600; color: var(--text); border-radius: 12px; gap: 3px; position: relative; background: none; border: none; }
+    font-weight: 600; color: var(--text); border-radius: 12px; gap: 3px; position: relative; background: none; border: none; padding: 0; margin: 0; }
   .day.muted { color: var(--border); }
   .day.today { border: 1.5px solid var(--accent-strong); font-weight: 700; }
+  .day.cumple { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
   .dot { width: 5px; height: 5px; border-radius: 999px; background: var(--accent); }
   .dot.success { background: var(--success); }
   .monthnav { display: flex; align-items: center; justify-content: space-between; }
@@ -347,6 +348,7 @@
   let showItinerarioForm = false;
   let subiendoFoto = false;
   let fotoError = '';
+  let calendarInfo = null; // { fecha: Date, items: [texto, ...] } del día tocado en el calendario
   let selectedMemberId = null; // en onboarding: a quién se ha elegido de la lista, pendiente de PIN
   let pinError = '';
 
@@ -431,6 +433,32 @@
     let next = new Date(hoy.getFullYear(), mm - 1, dd);
     if (next < hoy) next = new Date(hoy.getFullYear() + 1, mm - 1, dd);
     return Math.round((next - hoy) / 86400000);
+  }
+
+  // Nombres de quienes cumplen años un día concreto (mes 0-indexado, como Date.getMonth()).
+  function cumplesEnDia(month, day) {
+    const nombres = [];
+    Object.keys(miembros).forEach(function (id) {
+      const c = miembros[id].cumple;
+      if (!c || !/^\d{2}-\d{2}$/.test(c)) return;
+      const mm = parseInt(c.slice(0, 2), 10) - 1, dd = parseInt(c.slice(3, 5), 10);
+      if (mm === month && dd === day) nombres.push(miembros[id].nombre);
+    });
+    return nombres;
+  }
+
+  // Planes con alguna fecha (a votar o ya confirmada) ese día concreto.
+  function planesEnDia(dateObj) {
+    const items = [];
+    Object.values(planes).forEach(function (p) {
+      if (p.estado === 'confirmado') {
+        const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; });
+        if (f && sameDay(parseISODate(f.fecha), dateObj)) items.push({ titulo: p.titulo, confirmado: true });
+      } else {
+        (p.fechas || []).forEach(function (f) { if (sameDay(parseISODate(f.fecha), dateObj)) items.push({ titulo: p.titulo, confirmado: false }); });
+      }
+    });
+    return items;
   }
 
   function cumplesProximos(diasVentana) {
@@ -617,7 +645,19 @@
     render();
   }
 
-  function goTo(v) { view = v; window.scrollTo(0, 0); render(); }
+  function goTo(v) { view = v; calendarInfo = null; window.scrollTo(0, 0); render(); }
+
+  // Al tocar un día del calendario con algo marcado (plan o cumpleaños), muestra debajo
+  // de la cuadrícula una etiqueta con el detalle de ese día.
+  function mostrarInfoDia(y, m, d) {
+    const dateObj = new Date(y, m, d);
+    const items = [];
+    planesEnDia(dateObj).forEach(function (p) { items.push((p.confirmado ? '✓ ' : '') + p.titulo + (p.confirmado ? ' (confirmado)' : ' (a votar)')); });
+    cumplesEnDia(m, d).forEach(function (nombre) { items.push('Cumpleaños de ' + nombre); });
+    calendarInfo = { fecha: dateObj, items: items };
+    render();
+  }
+  function cerrarInfoDia() { calendarInfo = null; render(); }
 
   function openPlan(id) { currentPlanId = id; showGastoForm = false; showItinerarioForm = false; view = 'detail'; window.scrollTo(0, 0); render(); }
 
@@ -1107,54 +1147,37 @@
     const cells = buildMonthGrid(year, month);
     const today = new Date();
 
-    const eventsByDay = {}; // 'y-m-d' -> {confirmado:bool, votando:bool}
-    Object.values(planes).forEach(function (p) {
-      if (p.estado === 'confirmado') {
-        const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; });
-        if (f) {
-          const d = parseISODate(f.fecha);
-          const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
-          eventsByDay[key] = eventsByDay[key] || {}; eventsByDay[key].confirmado = true;
-        }
-      } else {
-        (p.fechas || []).forEach(function (f) {
-          const d = parseISODate(f.fecha);
-          const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
-          eventsByDay[key] = eventsByDay[key] || {}; eventsByDay[key].votando = true;
-        });
-      }
-    });
-
-    // Cumpleaños guardados como "MM-DD" (sin año, se repiten cada año), agrupados por
-    // "mes-día" para que salgan marcados en cualquier año que se muestre en el calendario.
-    const cumplesByDay = {}; // 'm-d' -> [nombre, ...]
-    Object.keys(miembros).forEach(function (id) {
-      const c = miembros[id].cumple;
-      if (!c || !/^\d{2}-\d{2}$/.test(c)) return;
-      const key = (parseInt(c.slice(0, 2), 10) - 1) + '-' + parseInt(c.slice(3, 5), 10);
-      cumplesByDay[key] = (cumplesByDay[key] || []).concat([miembros[id].nombre]);
-    });
-
     let html = renderTopbar('Appburnos Cuadrilla');
     html += '<div class="content">';
-    html += '<div class="monthnav"><button class="iconbtn" onclick="KApp.monthOffset--; KApp.render()">' + icon('chevronLeft', { size: 16 }) + '</button>' +
+    html += '<div class="monthnav"><button class="iconbtn" onclick="KApp.monthOffset--; KApp.cerrarInfoDia(); KApp.render()">' + icon('chevronLeft', { size: 16 }) + '</button>' +
       '<div class="monthlabel">' + base.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) + '</div>' +
-      '<button class="iconbtn" onclick="KApp.monthOffset++; KApp.render()">' + icon('chevronRight', { size: 16 }) + '</button></div>';
+      '<button class="iconbtn" onclick="KApp.monthOffset++; KApp.cerrarInfoDia(); KApp.render()">' + icon('chevronRight', { size: 16 }) + '</button></div>';
     html += '<div class="grid7">';
     ['L', 'M', 'X', 'J', 'V', 'S', 'D'].forEach(function (w) { html += '<div class="weekday">' + w + '</div>'; });
     cells.forEach(function (c) {
-      const key = c.date.getFullYear() + '-' + c.date.getMonth() + '-' + c.date.getDate();
-      const ev = eventsByDay[key];
+      const planesDia = planesEnDia(c.date);
+      const cumpleNombres = cumplesEnDia(c.date.getMonth(), c.date.getDate());
+      const hayConfirmado = planesDia.some(function (x) { return x.confirmado; });
+      const hayVotando = planesDia.some(function (x) { return !x.confirmado; });
       let dot = '';
-      if (ev && ev.confirmado) dot = '<div class="dot success"></div>';
-      else if (ev && ev.votando) dot = '<div class="dot"></div>';
-      const cumpleNombres = cumplesByDay[c.date.getMonth() + '-' + c.date.getDate()];
-      const cumpleTag = cumpleNombres ? icon('cake', { size: 10, style: 'stroke:var(--accent-strong)' }) : '';
+      if (hayConfirmado) dot = '<div class="dot success"></div>';
+      else if (hayVotando) dot = '<div class="dot"></div>';
+      const cumpleTag = cumpleNombres.length ? icon('cake', { size: 13, style: 'stroke:var(--accent-strong)' }) : '';
       const marcas = (dot || cumpleTag) ? '<div style="display:flex; gap:3px; align-items:center; justify-content:center">' + dot + cumpleTag + '</div>' : '';
-      const tituloCumple = cumpleNombres ? ' title="Cumpleaños: ' + esc(cumpleNombres.join(', ')) + '"' : '';
-      html += '<div class="day' + (c.muted ? ' muted' : '') + (sameDay(c.date, today) ? ' today' : '') + '"' + tituloCumple + '>' + c.day + marcas + '</div>';
+      const tapable = planesDia.length || cumpleNombres.length;
+      const onclickAttr = tapable ? ' onclick="KApp.mostrarInfoDia(' + c.date.getFullYear() + ',' + c.date.getMonth() + ',' + c.date.getDate() + ')"' : '';
+      html += '<button type="button" class="day' + (c.muted ? ' muted' : '') + (cumpleNombres.length ? ' cumple' : '') + (sameDay(c.date, today) ? ' today' : '') + '"' + onclickAttr + '>' + c.day + marcas + '</button>';
     });
     html += '</div>';
+
+    if (calendarInfo) {
+      html += '<div class="card" style="cursor:default; gap:6px">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between">' +
+        '<div class="card-title" style="font-size:13.5px">' + esc(calendarInfo.fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })) + '</div>' +
+        '<button class="iconbtn" style="width:26px; height:26px" onclick="KApp.cerrarInfoDia()">' + icon('x', { size: 12 }) + '</button></div>';
+      calendarInfo.items.forEach(function (t) { html += '<div class="meta-text" style="font-size:12.5px">' + esc(t) + '</div>'; });
+      html += '</div>';
+    }
 
     const list = Object.values(planes).slice().sort(function (a, b) {
       function keyOf(p) {
@@ -1279,6 +1302,7 @@
     openItinerarioForm: openItinerarioForm, closeItinerarioForm: closeItinerarioForm,
     guardarItinerarioItem: guardarItinerarioItem, eliminarItinerarioItem: eliminarItinerarioItem,
     seleccionarFoto: seleccionarFoto, onFotoSeleccionada: onFotoSeleccionada, eliminarFoto: eliminarFoto,
+    mostrarInfoDia: mostrarInfoDia, cerrarInfoDia: cerrarInfoDia,
     formDraft: formDraft, gastoDraft: gastoDraft, itinerarioDraft: itinerarioDraft, render: render,
     get monthOffset() { return monthOffset; }, set monthOffset(v) { monthOffset = v; },
   };
