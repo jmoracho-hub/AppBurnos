@@ -422,6 +422,19 @@
 
   function totalGasto(plan) { return round2((plan.gastos || []).reduce((s, g) => s + g.importe, 0)); }
 
+  // Fecha "de referencia" de un plan para ordenarlo: la confirmada si ya la hay, o si no
+  // la más próxima de las propuestas. Se usa para ordenar la lista de planes por fecha
+  // del plan en sí (no por cuándo se propuso).
+  function fechaClavePlan(p) {
+    if (p.estado === 'confirmado') {
+      const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; });
+      if (f) return parseISODate(f.fecha).getTime();
+    }
+    let min = Infinity;
+    (p.fechas || []).forEach(function (f) { const t = parseISODate(f.fecha).getTime(); if (t < min) min = t; });
+    return min === Infinity ? -Infinity : min;
+  }
+
   // ---------- avisos ----------
   // El cumpleaños se guarda como texto "MM-DD" (p.ej. "09-18" para el 18 de
   // septiembre) en el documento del miembro, sin año, porque se repite cada año.
@@ -908,7 +921,7 @@
   }
 
   function renderHome() {
-    const list = Object.values(planes).sort(function (a, b) { return (b.creadoEn || 0) - (a.creadoEn || 0); });
+    const list = Object.values(planes).sort(function (a, b) { return fechaClavePlan(b) - fechaClavePlan(a); });
     const activos = list.filter(function (p) { return p.estado !== 'confirmado'; });
     const confirmados = list.filter(function (p) { return p.estado === 'confirmado'; });
     let html = renderTopbar('Appburnos Cuadrilla');
