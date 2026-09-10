@@ -614,8 +614,17 @@
     db.doc('planes/' + plan.id).update({ estado: 'votando', fechaConfirmadaId: null }).catch(function () {});
   }
 
+  // Un gasto solo lo puede tocar quien lo metió. Los gastos guardados antes de que
+  // existiera este control no tienen "creadoPor" guardado; en ese caso se deja
+  // editar/borrar a quien pagó, que es el dato más parecido que tenemos.
+  function puedeGestionarGasto(g) {
+    if (!me || !g) return false;
+    return g.creadoPor ? g.creadoPor === me.id : g.pagadoPor === me.id;
+  }
+
   function openGastoForm(plan, gastoId) {
     const gastoExistente = gastoId ? (plan.gastos || []).find(function (g) { return g.id === gastoId; }) : null;
+    if (gastoExistente && !puedeGestionarGasto(gastoExistente)) return;
     if (gastoExistente) {
       gastoDraft.editId = gastoExistente.id;
       gastoDraft.descripcion = gastoExistente.descripcion;
@@ -643,20 +652,24 @@
     const existentes = plan.gastos || [];
     let nuevos;
     if (gastoDraft.editId) {
+      const original = existentes.find(function (g) { return g.id === gastoDraft.editId; });
+      if (!puedeGestionarGasto(original)) return;
       nuevos = existentes.map(function (g) {
         if (g.id !== gastoDraft.editId) return g;
-        return { id: g.id, descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
+        return { id: g.id, descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice(), creadoPor: g.creadoPor || me.id };
       });
     } else {
-      const gasto = { id: uid('g'), descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
+      const gasto = { id: uid('g'), descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice(), creadoPor: me.id };
       nuevos = existentes.concat([gasto]);
     }
     db.doc('planes/' + plan.id).update({ gastos: nuevos }).then(function () { showGastoForm = false; gastoDraft.editId = null; render(); });
   }
   function eliminarGasto(plan, gastoId) {
     if (!db) return;
+    const g = (plan.gastos || []).find(function (x) { return x.id === gastoId; });
+    if (!puedeGestionarGasto(g)) return;
     if (!window.confirm('¿Borrar este gasto?')) return;
-    const nuevos = (plan.gastos || []).filter(function (g) { return g.id !== gastoId; });
+    const nuevos = (plan.gastos || []).filter(function (x) { return x.id !== gastoId; });
     db.doc('planes/' + plan.id).update({ gastos: nuevos }).catch(function () {});
   }
 
@@ -857,15 +870,22 @@
         html += '<div class="meta-text" style="padding:4px 2px">Aún no hay gastos apuntados.</div>';
       } else {
         (plan.gastos || []).forEach(function (g) {
+          const esMio = puedeGestionarGasto(g);
           const editCall = "KApp.openGastoForm(planes['" + plan.id + "'],'" + g.id + "')";
-          html += '<div class="expenserow">' +
-            '<button type="button" class="type-icon" style="border:none; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' + icon('wallet', { size: 18 }) + '</button>' +
-            '<button type="button" style="flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' +
-            '<div class="exp-title">' + esc(g.descripcion) + '</div>' +
-            '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></button>' +
-            '<div class="exp-amount">' + money(g.importe) + '</div>' +
-            '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" title="Borrar gasto" onclick="KApp.eliminarGasto(planes[\'' + plan.id + '\'],\'' + g.id + '\')">' + icon('x', { size: 13 }) + '</button>' +
-            '</div>';
+          const iconTag = esMio
+            ? '<button type="button" class="type-icon" style="border:none; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' + icon('wallet', { size: 18 }) + '</button>'
+            : '<div class="type-icon">' + icon('wallet', { size: 18 }) + '</div>';
+          const infoTag = esMio
+            ? '<button type="button" style="flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' +
+              '<div class="exp-title">' + esc(g.descripcion) + '</div>' +
+              '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></button>'
+            : '<div style="flex:1; min-width:0">' +
+              '<div class="exp-title">' + esc(g.descripcion) + '</div>' +
+              '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></div>';
+          const borrarTag = esMio
+            ? '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" title="Borrar gasto" onclick="KApp.eliminarGasto(planes[\'' + plan.id + '\'],\'' + g.id + '\')">' + icon('x', { size: 13 }) + '</button>'
+            : '';
+          html += '<div class="expenserow">' + iconTag + infoTag + '<div class="exp-amount">' + money(g.importe) + '</div>' + borrarTag + '</div>';
         });
         const balances = computeBalances(plan);
         html += '<div class="section-label">Saldos</div><div class="card" style="cursor:default; gap:14px">';
