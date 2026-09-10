@@ -945,7 +945,7 @@
   }
 
   function renderHome() {
-    const list = Object.values(planes).sort(function (a, b) { return fechaClavePlan(b) - fechaClavePlan(a); });
+    const list = Object.values(planes).sort(function (a, b) { return fechaClavePlan(a) - fechaClavePlan(b); });
     const activos = list.filter(function (p) { return p.estado !== 'confirmado'; });
     const confirmados = list.filter(function (p) { return p.estado === 'confirmado'; });
     let html = renderTopbar('Appburnos Cuadrilla');
