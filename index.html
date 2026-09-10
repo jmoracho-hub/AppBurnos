@@ -414,6 +414,61 @@
 
   function totalGasto(plan) { return round2((plan.gastos || []).reduce((s, g) => s + g.importe, 0)); }
 
+  // ---------- avisos ----------
+  // El cumpleaños se guarda como texto "MM-DD" (p.ej. "09-18" para el 18 de
+  // septiembre) en el documento del miembro, sin año, porque se repite cada año.
+  function diasHastaCumple(mmdd) {
+    if (!mmdd || !/^\d{2}-\d{2}$/.test(mmdd)) return null;
+    const mm = parseInt(mmdd.slice(0, 2), 10), dd = parseInt(mmdd.slice(3, 5), 10);
+    if (!mm || !dd) return null;
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    let next = new Date(hoy.getFullYear(), mm - 1, dd);
+    if (next < hoy) next = new Date(hoy.getFullYear() + 1, mm - 1, dd);
+    return Math.round((next - hoy) / 86400000);
+  }
+
+  function cumplesProximos(diasVentana) {
+    return Object.keys(miembros).map(function (id) {
+      return { id: id, nombre: miembros[id].nombre, dias: diasHastaCumple(miembros[id].cumple) };
+    }).filter(function (x) { return x.dias !== null && x.dias <= diasVentana; })
+      .sort(function (a, b) { return a.dias - b.dias; });
+  }
+
+  function misSaldosPendientes() {
+    const avisos = [];
+    if (!me) return avisos;
+    Object.values(planes).forEach(function (p) {
+      if (p.estado !== 'confirmado' || !(p.gastos || []).length) return;
+      const settlements = computeSettlements(computeBalances(p));
+      settlements.forEach(function (s) {
+        if (s.from === me.id) avisos.push({ tipo: 'debes', plan: p.titulo, otro: s.to, importe: s.amount });
+        else if (s.to === me.id) avisos.push({ tipo: 'tedeben', plan: p.titulo, otro: s.from, importe: s.amount });
+      });
+    });
+    return avisos;
+  }
+
+  function renderAvisos() {
+    if (!me) return '';
+    const cumples = cumplesProximos(14);
+    const dinero = misSaldosPendientes();
+    if (!cumples.length && !dinero.length) return '';
+    let html = '<div class="section-label">Avisos</div><div class="card" style="cursor:default; gap:10px">';
+    cumples.forEach(function (c) {
+      const cuando = c.dias === 0 ? 'es hoy' : (c.dias === 1 ? 'es mañana' : 'es en ' + c.dias + ' días');
+      html += '<div class="inforow">' + icon('party', { size: 16 }) + 'El cumpleaños de <b>' + esc(c.nombre) + '</b> ' + cuando + '</div>';
+    });
+    dinero.forEach(function (d) {
+      if (d.tipo === 'debes') {
+        html += '<div class="inforow">' + icon('wallet', { size: 16 }) + 'Debes <b>' + money(d.importe) + '</b> a ' + esc(nombreDe(d.otro)) + ' <span class="meta-text">· ' + esc(d.plan) + '</span></div>';
+      } else {
+        html += '<div class="inforow">' + icon('wallet', { size: 16 }) + '<b>' + esc(nombreDe(d.otro)) + '</b> te debe ' + money(d.importe) + ' <span class="meta-text">· ' + esc(d.plan) + '</span></div>';
+      }
+    });
+    html += '</div>';
+    return html;
+  }
+
   // ---------- db wiring ----------
   // ---------- Firebase (sustituye a la base de datos de Claude) ----------
   const firebaseConfig = {
@@ -760,6 +815,7 @@
     const confirmados = list.filter(function (p) { return p.estado === 'confirmado'; });
     let html = renderTopbar('Appburnos Cuadrilla');
     html += '<div class="content">';
+    html += renderAvisos();
     if (list.length === 0) {
       html += '<div class="empty-state">' + icon('party', { size: 46, style: 'width:46px;height:46px;stroke:var(--border)' }) +
         '<h3>Aún no hay planes</h3><p>Propón el primero: una casa rural, una cena, lo que sea. La cuadrilla vota la fecha y listo.</p></div>';
