@@ -1125,6 +1125,16 @@
       }
     });
 
+    // Cumpleaños guardados como "MM-DD" (sin año, se repiten cada año), agrupados por
+    // "mes-día" para que salgan marcados en cualquier año que se muestre en el calendario.
+    const cumplesByDay = {}; // 'm-d' -> [nombre, ...]
+    Object.keys(miembros).forEach(function (id) {
+      const c = miembros[id].cumple;
+      if (!c || !/^\d{2}-\d{2}$/.test(c)) return;
+      const key = (parseInt(c.slice(0, 2), 10) - 1) + '-' + parseInt(c.slice(3, 5), 10);
+      cumplesByDay[key] = (cumplesByDay[key] || []).concat([miembros[id].nombre]);
+    });
+
     let html = renderTopbar('Appburnos Cuadrilla');
     html += '<div class="content">';
     html += '<div class="monthnav"><button class="iconbtn" onclick="KApp.monthOffset--; KApp.render()">' + icon('chevronLeft', { size: 16 }) + '</button>' +
@@ -1138,7 +1148,11 @@
       let dot = '';
       if (ev && ev.confirmado) dot = '<div class="dot success"></div>';
       else if (ev && ev.votando) dot = '<div class="dot"></div>';
-      html += '<div class="day' + (c.muted ? ' muted' : '') + (sameDay(c.date, today) ? ' today' : '') + '">' + c.day + dot + '</div>';
+      const cumpleNombres = cumplesByDay[c.date.getMonth() + '-' + c.date.getDate()];
+      const cumpleTag = cumpleNombres ? icon('cake', { size: 10, style: 'stroke:var(--accent-strong)' }) : '';
+      const marcas = (dot || cumpleTag) ? '<div style="display:flex; gap:3px; align-items:center; justify-content:center">' + dot + cumpleTag + '</div>' : '';
+      const tituloCumple = cumpleNombres ? ' title="Cumpleaños: ' + esc(cumpleNombres.join(', ')) + '"' : '';
+      html += '<div class="day' + (c.muted ? ' muted' : '') + (sameDay(c.date, today) ? ' today' : '') + '"' + tituloCumple + '>' + c.day + marcas + '</div>';
     });
     html += '</div>';
 
