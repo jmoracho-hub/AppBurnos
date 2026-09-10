@@ -332,7 +332,8 @@
   let monthOffset = 0;
   let showGastoForm = false;
   let showItinerarioForm = false;
-  let onboardError = '';
+  let selectedMemberId = null; // en onboarding: a quién se ha elegido de la lista, pendiente de PIN
+  let pinError = '';
 
   const formDraft = { tipo: 'casa-rural', titulo: '', descripcion: '', sitio: '', precio: '', fechas: [] };
   const gastoDraft = { descripcion: '', pagadoPor: '', importe: '', paraQuienes: [] };
@@ -471,6 +472,13 @@
       const next = {};
       snap.docs.forEach(function (d) { next[d.id] = d.data(); });
       miembros = next;
+      // Si mi identidad guardada ya no existe en la lista de la cuadrilla (p. ej. la
+      // reorganizó el admin), la sesión deja de ser válida y hay que volver a entrar.
+      if (me && !miembros[me.id]) {
+        me = null;
+        try { localStorage.removeItem('kuadrilla-me'); } catch (e) {}
+        view = 'onboarding';
+      }
       render();
     }, function () { /* degrade quietly */ });
 
@@ -486,21 +494,48 @@
     render();
   }
 
-  function saveMemberIfNeeded() {
-    if (!me || !db) return;
-    db.collection('miembros').doc(me.id).set({ nombre: me.nombre, actualizado: Date.now() }).catch(function () {});
+  // ---------- actions ----------
+  // Entrada: se elige el nombre de una lista cerrada (la gestiona el admin de la
+  // cuadrilla dando de alta a cada persona en Firestore con su PIN) y se confirma
+  // con el PIN de esa persona. Así nadie puede entrar con un nombre inventado ni
+  // votar dos veces suplantando a otra persona.
+  function selectMiembro(id) {
+    selectedMemberId = id;
+    pinError = '';
+    render();
   }
 
-  // ---------- actions ----------
-  function submitOnboarding(nombre) {
-    nombre = (nombre || '').trim();
-    if (!nombre) { onboardError = 'Escribe tu nombre para continuar.'; render(); return; }
-    const id = slugify(nombre);
-    me = { id: id, nombre: nombre };
+  function volverListaMiembros() {
+    selectedMemberId = null;
+    pinError = '';
+    render();
+  }
+
+  function intentarEntrar(pin) {
+    const miembro = miembros[selectedMemberId];
+    if (!miembro) { pinError = 'Elige tu nombre de la lista.'; render(); return; }
+    pin = (pin || '').trim();
+    if (!pin) { pinError = 'Escribe tu PIN.'; render(); return; }
+    if (String(miembro.pin == null ? '' : miembro.pin) !== pin) {
+      pinError = 'PIN incorrecto. Inténtalo de nuevo.';
+      render();
+      return;
+    }
+    me = { id: selectedMemberId, nombre: miembro.nombre };
     try { localStorage.setItem('kuadrilla-me', JSON.stringify(me)); } catch (e) {}
-    saveMemberIfNeeded();
-    onboardError = '';
+    selectedMemberId = null;
+    pinError = '';
     view = 'home';
+    render();
+  }
+
+  function cerrarSesion() {
+    if (!window.confirm('¿Cerrar sesión y volver a elegir usuario?')) return;
+    me = null;
+    try { localStorage.removeItem('kuadrilla-me'); } catch (e) {}
+    selectedMemberId = null;
+    pinError = '';
+    view = 'onboarding';
     render();
   }
 
@@ -612,16 +647,6 @@
     db.doc('planes/' + plan.id).update({ itinerario: nuevos }).catch(function () {});
   }
 
-  function cambiarNombre() {
-    const nuevo = window.prompt('¿Cómo te llamas?', me ? me.nombre : '');
-    if (nuevo && nuevo.trim()) {
-      me = { id: slugify(nuevo.trim()), nombre: nuevo.trim() };
-      try { localStorage.setItem('kuadrilla-me', JSON.stringify(me)); } catch (e) {}
-      saveMemberIfNeeded();
-      render();
-    }
-  }
-
   // ---------- render helpers ----------
   function avatarStack(ids, max) {
     max = max || 4;
@@ -668,7 +693,7 @@
     }
     return '<div class="topbar">' +
       '<div class="brand"><div class="brand-mark display">AC</div><div class="brand-name display">' + esc(title) + '</div></div>' +
-      '<button class="me-avatar" onclick="KApp.cambiarNombre()" title="Cambiar nombre">' + esc(initials(me ? me.nombre : '?')) + '</button>' +
+      '<button class="me-avatar" onclick="KApp.cerrarSesion()" title="Cerrar sesión">' + esc(initials(me ? me.nombre : '?')) + '</button>' +
       '</div>';
   }
 
@@ -982,14 +1007,37 @@
   }
 
   function renderOnboarding() {
+    // Paso 1: elegir el nombre de la lista cerrada de la cuadrilla (no se puede escribir uno nuevo).
+    if (!selectedMemberId) {
+      const lista = Object.keys(miembros).map(function (id) { return Object.assign({ id: id }, miembros[id]); })
+        .sort(function (a, b) { return (a.nombre || '').localeCompare(b.nombre || '', 'es'); });
+      let html = '<div class="onboard-wrap">' +
+        '<div class="brand-mark display">AC</div>' +
+        '<h1 class="display">Appburnos Cuadrilla</h1>' +
+        '<p>Elige tu nombre en la lista para entrar.</p>' +
+        '<div class="onboard-form">';
+      if (lista.length === 0) {
+        html += '<p style="font-size:12.5px">Todavía no hay nadie dado de alta en la cuadrilla. Pídele al admin que te añada.</p>';
+      } else {
+        lista.forEach(function (m) {
+          html += '<button type="button" class="ghost-btn" style="justify-content:flex-start; gap:10px" onclick="KApp.selectMiembro(\'' + m.id + '\')">' +
+            '<div class="avatar">' + esc(initials(m.nombre)) + '</div>' + esc(m.nombre) + '</button>';
+        });
+      }
+      html += '</div></div>';
+      return html;
+    }
+    // Paso 2: confirmar con el PIN de esa persona.
+    const miembro = miembros[selectedMemberId] || { nombre: '' };
     return '<div class="onboard-wrap">' +
       '<div class="brand-mark display">AC</div>' +
-      '<h1 class="display">Appburnos Cuadrilla</h1>' +
-      '<p>Planes, fechas y gastos de la cuadrilla, todo en un sitio. ¿Cómo te llamas para que el resto te reconozca?</p>' +
+      '<h1 class="display">Hola, ' + esc(miembro.nombre) + '</h1>' +
+      '<p>Escribe tu PIN para entrar.</p>' +
       '<div class="onboard-form">' +
-      '<input id="ob-nombre" placeholder="Tu nombre" onkeydown="if(event.key===\'Enter\') KApp.submitOnboarding(this.value)" />' +
-      (onboardError ? '<div style="color:var(--accent-strong); font-size:12.5px; font-weight:600">' + esc(onboardError) + '</div>' : '') +
-      '<button class="primary-btn" onclick="KApp.submitOnboarding(document.getElementById(\'ob-nombre\').value)">Entrar</button>' +
+      '<input id="ob-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN" onkeydown="if(event.key===\'Enter\') KApp.intentarEntrar(this.value)" />' +
+      (pinError ? '<div style="color:var(--accent-strong); font-size:12.5px; font-weight:600">' + esc(pinError) + '</div>' : '') +
+      '<button class="primary-btn" onclick="KApp.intentarEntrar(document.getElementById(\'ob-pin\').value)">Entrar</button>' +
+      '<button type="button" class="ghost-btn" onclick="KApp.volverListaMiembros()">' + icon('chevronLeft', { size: 14 }) + ' Elegir otra persona</button>' +
       '</div></div>';
   }
 
@@ -1018,7 +1066,8 @@
     addFecha: addFecha, removeFecha: removeFecha, publicarPlan: publicarPlan, setVote: setVote,
     toggleApuntado: toggleApuntado, cerrarVotacion: cerrarVotacion, reabrirVotacion: reabrirVotacion,
     openGastoForm: openGastoForm, closeGastoForm: closeGastoForm, toggleParaQuien: toggleParaQuien,
-    guardarGasto: guardarGasto, cambiarNombre: cambiarNombre, submitOnboarding: submitOnboarding,
+    guardarGasto: guardarGasto, cerrarSesion: cerrarSesion, selectMiembro: selectMiembro,
+    volverListaMiembros: volverListaMiembros, intentarEntrar: intentarEntrar,
     openItinerarioForm: openItinerarioForm, closeItinerarioForm: closeItinerarioForm,
     guardarItinerarioItem: guardarItinerarioItem, eliminarItinerarioItem: eliminarItinerarioItem,
     formDraft: formDraft, gastoDraft: gastoDraft, itinerarioDraft: itinerarioDraft, render: render,
