@@ -369,7 +369,7 @@
 
   const formDraft = { tipo: 'casa-rural', titulo: '', descripcion: '', sitio: '', precio: '', fechas: [] };
   const gastoDraft = { editId: null, descripcion: '', pagadoPor: '', importe: '', paraQuienes: [] };
-  const itinerarioDraft = { dia: 1, hora: '', descripcion: '' };
+  const itinerarioDraft = { editId: null, dia: 1, hora: '', descripcion: '' };
 
   function sortItinerario(items) {
     return (items || []).slice().sort(function (a, b) {
@@ -694,7 +694,7 @@
   }
   function cerrarInfoDia() { calendarInfo = null; render(); }
 
-  function openPlan(id) { currentPlanId = id; showGastoForm = false; showItinerarioForm = false; view = 'detail'; window.scrollTo(0, 0); render(); }
+  function openPlan(id) { currentPlanId = id; showGastoForm = false; showItinerarioForm = false; itinerarioDraft.editId = null; gastoDraft.editId = null; view = 'detail'; window.scrollTo(0, 0); render(); }
 
   function openNewPlan() {
     formDraft.tipo = 'casa-rural'; formDraft.titulo = ''; formDraft.descripcion = '';
@@ -817,20 +817,41 @@
     db.doc('planes/' + plan.id).update({ gastos: nuevos }).catch(function () {});
   }
 
-  function openItinerarioForm(plan) {
-    const maxDia = (plan.itinerario || []).reduce(function (m, it) { return Math.max(m, it.dia || 1); }, 0);
-    itinerarioDraft.dia = Math.max(1, maxDia); itinerarioDraft.hora = ''; itinerarioDraft.descripcion = '';
+  // El itinerario lo puede tocar cualquiera apuntado al plan (añadir, editar o
+  // quitar puntos), no solo quien lo creó: es una lista compartida para cuadrar
+  // el viaje entre todos, no algo "propiedad" de una sola persona.
+  function openItinerarioForm(plan, itemId) {
+    const itemExistente = itemId ? (plan.itinerario || []).find(function (it) { return it.id === itemId; }) : null;
+    if (itemExistente) {
+      itinerarioDraft.editId = itemExistente.id;
+      itinerarioDraft.dia = itemExistente.dia;
+      itinerarioDraft.hora = itemExistente.hora || '';
+      itinerarioDraft.descripcion = itemExistente.descripcion;
+    } else {
+      const maxDia = (plan.itinerario || []).reduce(function (m, it) { return Math.max(m, it.dia || 1); }, 0);
+      itinerarioDraft.editId = null;
+      itinerarioDraft.dia = Math.max(1, maxDia); itinerarioDraft.hora = ''; itinerarioDraft.descripcion = '';
+    }
     showItinerarioForm = true; render();
   }
-  function closeItinerarioForm() { showItinerarioForm = false; render(); }
+  function closeItinerarioForm() { showItinerarioForm = false; itinerarioDraft.editId = null; render(); }
   function guardarItinerarioItem(plan) {
     const dia = parseInt(readFormField('it-dia'), 10);
     const hora = readFormField('it-hora');
     const descripcion = readFormField('it-descripcion').trim();
     if (!dia || dia < 1 || !descripcion || !db) return;
-    const item = { id: uid('i'), dia: dia, hora: hora, descripcion: descripcion };
-    const nuevos = (plan.itinerario || []).concat([item]);
-    db.doc('planes/' + plan.id).update({ itinerario: nuevos }).then(function () { showItinerarioForm = false; render(); });
+    const existentes = plan.itinerario || [];
+    let nuevos;
+    if (itinerarioDraft.editId) {
+      nuevos = existentes.map(function (it) {
+        if (it.id !== itinerarioDraft.editId) return it;
+        return { id: it.id, dia: dia, hora: hora, descripcion: descripcion };
+      });
+    } else {
+      const item = { id: uid('i'), dia: dia, hora: hora, descripcion: descripcion };
+      nuevos = existentes.concat([item]);
+    }
+    db.doc('planes/' + plan.id).update({ itinerario: nuevos }).then(function () { showItinerarioForm = false; itinerarioDraft.editId = null; render(); });
   }
   function eliminarItinerarioItem(plan, itemId) {
     if (!db) return;
@@ -1049,9 +1070,11 @@
       html += '<div class="meta-text" style="padding:4px 2px">Aún no hay itinerario. Añade el primer punto.</div>';
     } else {
       itinerario.forEach(function (it) {
+        const editCall = "KApp.openItinerarioForm(planes['" + plan.id + "'],'" + it.id + "')";
         html += '<div class="itin-item"><div class="itin-badge">Día ' + it.dia + (it.hora ? '<br>' + esc(it.hora) : '') + '</div>' +
-          '<div class="itin-desc" style="flex:1">' + esc(it.descripcion) + '</div>' +
-          '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" onclick="KApp.eliminarItinerarioItem(planes[\'' + plan.id + '\'],\'' + it.id + '\')">' + icon('x', { size: 13 }) + '</button></div>';
+          '<button type="button" style="flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; cursor:pointer" title="Editar punto" onclick="' + editCall + '">' +
+          '<div class="itin-desc">' + esc(it.descripcion) + '</div></button>' +
+          '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" title="Borrar punto" onclick="KApp.eliminarItinerarioItem(planes[\'' + plan.id + '\'],\'' + it.id + '\')">' + icon('x', { size: 13 }) + '</button></div>';
       });
     }
 
@@ -1130,13 +1153,13 @@
 
   function renderItinerarioModal(plan) {
     let html = '<div class="modal-overlay" onclick="if(event.target===this) KApp.closeItinerarioForm()"><div class="modal-sheet"><div class="content" style="padding-top:24px">';
-    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">Añadir al itinerario</div><button class="iconbtn" onclick="KApp.closeItinerarioForm()">' + icon('x', { size: 16 }) + '</button></div>';
+    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">' + (itinerarioDraft.editId ? 'Editar punto del itinerario' : 'Añadir al itinerario') + '</div><button class="iconbtn" onclick="KApp.closeItinerarioForm()">' + icon('x', { size: 16 }) + '</button></div>';
     html += '<div style="display:flex; gap:12px">';
     html += '<div class="field" style="flex:1"><div class="label">Día</div><input id="it-dia" type="number" min="1" step="1" value="' + esc(itinerarioDraft.dia) + '" oninput="KApp.itinerarioDraft.dia=this.value" /></div>';
     html += '<div class="field" style="flex:1"><div class="label">Hora (opcional)</div><input id="it-hora" type="time" value="' + esc(itinerarioDraft.hora) + '" oninput="KApp.itinerarioDraft.hora=this.value" /></div>';
     html += '</div>';
     html += '<div class="field"><div class="label">¿Qué toca?</div><input id="it-descripcion" value="' + esc(itinerarioDraft.descripcion) + '" oninput="KApp.itinerarioDraft.descripcion=this.value" placeholder="Ruta al mirador, barbacoa, check-in..." /></div>';
-    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarItinerarioItem(planes[\'' + plan.id + '\'])">Guardar</button></div>';
+    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarItinerarioItem(planes[\'' + plan.id + '\'])">' + (itinerarioDraft.editId ? 'Guardar cambios' : 'Guardar') + '</button></div>';
     html += '</div></div></div>';
     return html;
   }
