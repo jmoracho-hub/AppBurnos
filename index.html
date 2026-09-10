@@ -65,7 +65,10 @@
   a:hover { color: var(--accent); }
   h1, h2, h3, .display { font-family: 'Space Grotesk', system-ui, sans-serif; }
   button, input, textarea, select { font-family: inherit; color: inherit; }
-  input, textarea, select { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 11px 13px; font-size: 14px; width: 100%; }
+  /* font-size 16px (no 14px): por debajo de 16px, Safari en iPhone hace zoom
+     automático al tocar el campo, y en la app "instalada" desde la pantalla de
+     inicio ese zoom se queda pegado en las pantallas siguientes. */
+  input, textarea, select { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 11px 13px; font-size: 16px; width: 100%; }
   input:focus, textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
 
@@ -342,7 +345,7 @@
   let pinError = '';
 
   const formDraft = { tipo: 'casa-rural', titulo: '', descripcion: '', sitio: '', precio: '', fechas: [] };
-  const gastoDraft = { descripcion: '', pagadoPor: '', importe: '', paraQuienes: [] };
+  const gastoDraft = { editId: null, descripcion: '', pagadoPor: '', importe: '', paraQuienes: [] };
   const itinerarioDraft = { dia: 1, hora: '', descripcion: '' };
 
   function sortItinerario(items) {
@@ -611,12 +614,22 @@
     db.doc('planes/' + plan.id).update({ estado: 'votando', fechaConfirmadaId: null }).catch(function () {});
   }
 
-  function openGastoForm(plan) {
-    gastoDraft.descripcion = ''; gastoDraft.pagadoPor = me ? me.id : ''; gastoDraft.importe = '';
-    gastoDraft.paraQuienes = (plan.apuntados || []).slice();
+  function openGastoForm(plan, gastoId) {
+    const gastoExistente = gastoId ? (plan.gastos || []).find(function (g) { return g.id === gastoId; }) : null;
+    if (gastoExistente) {
+      gastoDraft.editId = gastoExistente.id;
+      gastoDraft.descripcion = gastoExistente.descripcion;
+      gastoDraft.pagadoPor = gastoExistente.pagadoPor;
+      gastoDraft.importe = gastoExistente.importe;
+      gastoDraft.paraQuienes = (gastoExistente.paraQuienes || []).slice();
+    } else {
+      gastoDraft.editId = null;
+      gastoDraft.descripcion = ''; gastoDraft.pagadoPor = me ? me.id : ''; gastoDraft.importe = '';
+      gastoDraft.paraQuienes = (plan.apuntados || []).slice();
+    }
     showGastoForm = true; render();
   }
-  function closeGastoForm() { showGastoForm = false; render(); }
+  function closeGastoForm() { showGastoForm = false; gastoDraft.editId = null; render(); }
   function toggleParaQuien(pid) {
     const i = gastoDraft.paraQuienes.indexOf(pid);
     if (i >= 0) gastoDraft.paraQuienes.splice(i, 1); else gastoDraft.paraQuienes.push(pid);
@@ -627,9 +640,24 @@
     const importe = parseFloat(readFormField('g-importe'));
     const pagadoPor = readFormField('g-pagador');
     if (!descripcion || !importe || importe <= 0 || !pagadoPor || gastoDraft.paraQuienes.length === 0 || !db) return;
-    const gasto = { id: uid('g'), descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
-    const nuevos = (plan.gastos || []).concat([gasto]);
-    db.doc('planes/' + plan.id).update({ gastos: nuevos }).then(function () { showGastoForm = false; render(); });
+    const existentes = plan.gastos || [];
+    let nuevos;
+    if (gastoDraft.editId) {
+      nuevos = existentes.map(function (g) {
+        if (g.id !== gastoDraft.editId) return g;
+        return { id: g.id, descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
+      });
+    } else {
+      const gasto = { id: uid('g'), descripcion: descripcion, pagadoPor: pagadoPor, importe: round2(importe), paraQuienes: gastoDraft.paraQuienes.slice() };
+      nuevos = existentes.concat([gasto]);
+    }
+    db.doc('planes/' + plan.id).update({ gastos: nuevos }).then(function () { showGastoForm = false; gastoDraft.editId = null; render(); });
+  }
+  function eliminarGasto(plan, gastoId) {
+    if (!db) return;
+    if (!window.confirm('¿Borrar este gasto?')) return;
+    const nuevos = (plan.gastos || []).filter(function (g) { return g.id !== gastoId; });
+    db.doc('planes/' + plan.id).update({ gastos: nuevos }).catch(function () {});
   }
 
   function openItinerarioForm(plan) {
@@ -829,10 +857,15 @@
         html += '<div class="meta-text" style="padding:4px 2px">Aún no hay gastos apuntados.</div>';
       } else {
         (plan.gastos || []).forEach(function (g) {
-          html += '<div class="expenserow"><div class="type-icon">' + icon('wallet', { size: 18 }) + '</div>' +
-            '<div style="flex:1"><div class="exp-title">' + esc(g.descripcion) + '</div>' +
-            '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></div>' +
-            '<div class="exp-amount">' + money(g.importe) + '</div></div>';
+          const editCall = "KApp.openGastoForm(planes['" + plan.id + "'],'" + g.id + "')";
+          html += '<div class="expenserow">' +
+            '<button type="button" class="type-icon" style="border:none; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' + icon('wallet', { size: 18 }) + '</button>' +
+            '<button type="button" style="flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; cursor:pointer" title="Editar gasto" onclick="' + editCall + '">' +
+            '<div class="exp-title">' + esc(g.descripcion) + '</div>' +
+            '<div class="exp-sub">Pagó ' + esc(nombreDe(g.pagadoPor)) + ' · para ' + g.paraQuienes.length + '</div></button>' +
+            '<div class="exp-amount">' + money(g.importe) + '</div>' +
+            '<button class="iconbtn" style="width:28px; height:28px; flex-shrink:0" title="Borrar gasto" onclick="KApp.eliminarGasto(planes[\'' + plan.id + '\'],\'' + g.id + '\')">' + icon('x', { size: 13 }) + '</button>' +
+            '</div>';
         });
         const balances = computeBalances(plan);
         html += '<div class="section-label">Saldos</div><div class="card" style="cursor:default; gap:14px">';
@@ -881,7 +914,7 @@
 
   function renderGastoModal(plan) {
     let html = '<div class="modal-overlay" onclick="if(event.target===this) KApp.closeGastoForm()"><div class="modal-sheet"><div class="content" style="padding-top:24px">';
-    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">Añadir gasto</div><button class="iconbtn" onclick="KApp.closeGastoForm()">' + icon('x', { size: 16 }) + '</button></div>';
+    html += '<div style="display:flex; align-items:center; justify-content:space-between"><div class="display" style="font-size:17px; font-weight:700">' + (gastoDraft.editId ? 'Editar gasto' : 'Añadir gasto') + '</div><button class="iconbtn" onclick="KApp.closeGastoForm()">' + icon('x', { size: 16 }) + '</button></div>';
     html += '<div class="field"><div class="label">Descripción</div><input id="g-descripcion" value="' + esc(gastoDraft.descripcion) + '" oninput="KApp.gastoDraft.descripcion=this.value" placeholder="Alquiler, cena, compra..." /></div>';
     html += '<div class="field"><div class="label">¿Cuánto?</div><input id="g-importe" type="number" min="0" step="0.01" value="' + esc(gastoDraft.importe) + '" oninput="KApp.gastoDraft.importe=this.value" placeholder="0" /></div>';
     html += '<div class="field"><div class="label">¿Quién pagó?</div><select id="g-pagador" onchange="KApp.gastoDraft.pagadoPor=this.value">';
@@ -895,7 +928,7 @@
       html += '<div class="checkrow" onclick="KApp.toggleParaQuien(\'' + pid + '\')"><div class="checkbox' + (checked ? ' checked' : '') + '">' + (checked ? icon('check', { size: 13, style: 'stroke:white' }) : '') + '</div>' + esc(nombreDe(pid)) + '</div>';
     });
     html += '</div></div>';
-    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarGasto(planes[\'' + plan.id + '\'])">Guardar gasto</button></div>';
+    html += '<div class="footer-bar" style="margin-top:6px"><button class="primary-btn" onclick="KApp.guardarGasto(planes[\'' + plan.id + '\'])">' + (gastoDraft.editId ? 'Guardar cambios' : 'Guardar gasto') + '</button></div>';
     html += '</div></div></div>';
     return html;
   }
@@ -1075,7 +1108,7 @@
     addFecha: addFecha, removeFecha: removeFecha, publicarPlan: publicarPlan, setVote: setVote,
     toggleApuntado: toggleApuntado, cerrarVotacion: cerrarVotacion, reabrirVotacion: reabrirVotacion,
     openGastoForm: openGastoForm, closeGastoForm: closeGastoForm, toggleParaQuien: toggleParaQuien,
-    guardarGasto: guardarGasto, cerrarSesion: cerrarSesion, selectMiembro: selectMiembro,
+    guardarGasto: guardarGasto, eliminarGasto: eliminarGasto, cerrarSesion: cerrarSesion, selectMiembro: selectMiembro,
     volverListaMiembros: volverListaMiembros, intentarEntrar: intentarEntrar,
     openItinerarioForm: openItinerarioForm, closeItinerarioForm: closeItinerarioForm,
     guardarItinerarioItem: guardarItinerarioItem, eliminarItinerarioItem: eliminarItinerarioItem,
