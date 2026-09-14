@@ -128,6 +128,7 @@
   .badge { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
   .badge-pending { background: var(--accent-soft); color: var(--accent-strong); }
   .badge-confirmed { background: var(--success-soft); color: var(--success-strong); }
+  .badge-historico { background: var(--surface-2); color: var(--text-muted); }
   .progress-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
   .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; }
   .progress-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; margin-top: 6px; }
@@ -137,6 +138,7 @@
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; border: 2px solid var(--surface); margin-left: -8px; flex-shrink: 0; }
   .avatar-stack .avatar:first-child { margin-left: 0; }
   .avatar.lg { width: 34px; height: 34px; font-size: 12.5px; }
+  .avatar.sm { width: 22px; height: 22px; font-size: 9.5px; }
   .meta-text { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
   .confirmed-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--success-strong); }
   .icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
@@ -256,6 +258,14 @@
   .modal-overlay { position: fixed; inset: 0; background: oklch(20% 0.02 55 / 0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
   .modal-sheet { width: 100%; max-width: 480px; background: var(--bg); border-radius: 22px 22px 0 0; max-height: 88vh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
 
+  .comment-row { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 13px; display: flex; flex-direction: column; gap: 4px; }
+  .comment-head { display: flex; align-items: center; gap: 8px; }
+  .comment-author { font-size: 12.5px; font-weight: 700; }
+  .comment-time { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+  .comment-text { font-size: 13.5px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+  .comment-composer { display: flex; gap: 8px; align-items: center; }
+  .comment-send { flex-shrink: 0; padding: 11px 16px; border-radius: 12px; background: var(--accent); color: white; border: none; font-size: 13px; font-weight: 700; }
+
   ::selection { background: var(--accent-soft); }
   @media (prefers-reduced-motion: no-preference) {
     .card, .fab { transition: transform 0.12s ease; }
@@ -303,6 +313,12 @@
     try { return parseISODate(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }); }
     catch (e) { return iso; }
   }
+  function formatDateTime(ts) {
+    try {
+      const d = new Date(ts);
+      return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
   function dateBoxParts(iso) {
     const d = parseISODate(iso);
     return { day: d.getDate(), mon: d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') };
@@ -347,6 +363,8 @@
       party: '<path d="M4 21c0-4 4-6 8-6s8 2 8 6"/><circle cx="12" cy="8" r="4"/>',
       arrowright: '<path d="M5 12h14M13 6l6 6-6 6"/>',
       refresh: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
+      chat: '<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      history: '<path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 2.13-6.36L3 8"/><path d="M12 7v5l3 2"/>',
     };
     return '<svg class="icon" viewBox="0 0 24 24" style="width:' + size + 'px;height:' + size + 'px' + (opts.style ? ';' + opts.style : '') + '">' + (paths[name] || paths.star) + '</svg>';
   }
@@ -356,13 +374,14 @@
   let me = null; // { id, nombre }
   let miembros = {}; // id -> { nombre }
   let planes = {}; // id -> plan
-  let view = 'loading'; // loading | onboarding | home | calendar | gastos | detail | newplan
+  let view = 'loading'; // loading | onboarding | home | calendar | gastos | detail | newplan | historico
   let currentPlanId = null;
   let monthOffset = 0;
   let showGastoForm = false;
   let showItinerarioForm = false;
   let subiendoFoto = false;
   let fotoError = '';
+  let enviandoComentario = false;
   let calendarInfo = null; // { fecha: Date, items: [texto, ...] } del día tocado en el calendario
   let selectedMemberId = null; // en onboarding: a quién se ha elegido de la lista, pendiente de PIN
   let pinError = '';
@@ -448,6 +467,22 @@
     let min = Infinity;
     (p.fechas || []).forEach(function (f) { const t = parseISODate(f.fecha).getTime(); if (t < min) min = t; });
     return min === Infinity ? -Infinity : min;
+  }
+
+  // Un plan "ha pasado" (va al Histórico) cuando su fecha de referencia ya quedó
+  // atrás: la confirmada, si está confirmado; o, si nunca llegó a confirmarse,
+  // cuando incluso su fecha candidata más tardía ya pasó (plan que se quedó sin
+  // cerrar y ya no tiene sentido seguir votando).
+  function haPasado(p) {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    if (p.estado === 'confirmado') {
+      const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; });
+      if (!f) return false;
+      return parseISODate(f.fecha) < hoy;
+    }
+    const fechas = p.fechas || [];
+    if (!fechas.length) return false;
+    return fechas.every(function (f) { return parseISODate(f.fecha) < hoy; });
   }
 
   // ---------- avisos ----------
@@ -726,7 +761,7 @@
     const plan = {
       tipo: formDraft.tipo, titulo: titulo, descripcion: descripcion, sitio: sitio, precio: precio,
       fechas: fechas, votos: {}, apuntados: [me.id], estado: 'votando', fechaConfirmadaId: null,
-      gastos: [], itinerario: [], fotos: [], creadoPor: me.id, creadoEn: Date.now(),
+      gastos: [], itinerario: [], fotos: [], comentarios: [], creadoPor: me.id, creadoEn: Date.now(),
     };
     db.collection('planes').add(plan).then(function (ref) { openPlan(ref.id); });
   }
@@ -859,6 +894,21 @@
     db.doc('planes/' + plan.id).update({ itinerario: nuevos }).catch(function () {});
   }
 
+  // ---------- comentarios ----------
+  // Un hilo corto por plan (no un chat completo) para rematar detalles sin volver
+  // a WhatsApp: quién lleva el coche, qué falta por comprar, etc. Cualquiera puede
+  // escribir, nadie puede borrar lo que ya se dijo (como un tablón, no un chat privado).
+  function enviarComentario(plan) {
+    const texto = readFormField('c-texto').trim();
+    if (!texto || !db || !me) return;
+    const comentario = { id: uid('c'), texto: texto, autor: me.id, creadoEn: Date.now() };
+    const nuevos = (plan.comentarios || []).concat([comentario]);
+    enviandoComentario = true; render();
+    db.doc('planes/' + plan.id).update({ comentarios: nuevos })
+      .then(function () { enviandoComentario = false; render(); })
+      .catch(function () { enviandoComentario = false; render(); });
+  }
+
   // ---------- fotos ----------
   // Las fotos se suben a Cloudinary (un servicio externo gratuito para imágenes; Firestore
   // no está pensado para guardar archivos) y solo su enlace queda guardado en el plan.
@@ -943,6 +993,26 @@
       '</div>' + footer + '</button>';
   }
 
+  function historicoCard(plan) {
+    const isConfirmado = plan.estado === 'confirmado';
+    let sub = 'No se llegó a confirmar';
+    if (isConfirmado) {
+      const fecha = (plan.fechas || []).find(function (f) { return f.id === plan.fechaConfirmadaId; });
+      sub = fecha ? formatDateLong(fecha.fecha) : 'Fecha confirmada';
+    }
+    return '<button class="card" onclick="KApp.openPlan(\'' + plan.id + '\')">' +
+      '<div class="card-top">' +
+      '<div class="type-icon">' + icon(tipoIconId(plan.tipo), { size: 20 }) + '</div>' +
+      '<div style="flex:1; min-width:0; text-align:left">' +
+      '<div class="card-title">' + esc(plan.titulo) + '</div>' +
+      '<div class="card-sub">' + esc(sub) + '</div>' +
+      '</div>' +
+      '<div class="badge badge-historico">Pasado</div>' +
+      '</div>' +
+      '<div class="card-footer">' + avatarStack(plan.apuntados || []) + '<div class="meta-text">' + (plan.apuntados || []).length + ' apuntados</div></div>' +
+      '</button>';
+  }
+
   function renderTopbar(title, opts) {
     opts = opts || {};
     const refreshBtn = '<button class="refresh-btn" onclick="KApp.refrescar()" title="Actualizar">' + icon('refresh', { size: 17 }) + '</button>';
@@ -967,8 +1037,10 @@
 
   function renderHome() {
     const list = Object.values(planes).sort(function (a, b) { return fechaClavePlan(a) - fechaClavePlan(b); });
-    const activos = list.filter(function (p) { return p.estado !== 'confirmado'; });
-    const confirmados = list.filter(function (p) { return p.estado === 'confirmado'; });
+    const historicos = list.filter(haPasado);
+    const enCurso = list.filter(function (p) { return !haPasado(p); });
+    const activos = enCurso.filter(function (p) { return p.estado !== 'confirmado'; });
+    const confirmados = enCurso.filter(function (p) { return p.estado === 'confirmado'; });
     let html = renderTopbar('Appburnos Cuadrilla');
     html += '<div class="content">';
     html += renderAvisos();
@@ -984,10 +1056,33 @@
         html += '<div class="section-label">Confirmados</div>';
         confirmados.forEach(function (p) { html += planCard(p); });
       }
+      if (!activos.length && !confirmados.length && historicos.length) {
+        html += '<div class="empty-state">' + icon('party', { size: 46, style: 'width:46px;height:46px;stroke:var(--border)' }) +
+          '<h3>Nada en marcha</h3><p>Todos los planes de la cuadrilla están en el histórico. ¡Proponed uno nuevo!</p></div>';
+      }
+    }
+    if (historicos.length) {
+      html += '<button type="button" class="ghost-btn" style="justify-content:space-between" onclick="KApp.goTo(\'historico\')">' +
+        '<span style="display:flex; align-items:center; gap:8px">' + icon('history', { size: 15 }) + ' Histórico</span>' +
+        '<span class="meta-text">' + historicos.length + '</span></button>';
     }
     html += '</div>';
     html += '<button class="fab" onclick="KApp.openNewPlan()">' + icon('plus', { size: 24, style: 'stroke:white' }) + '</button>';
     html += renderBottomNav('home');
+    return html;
+  }
+
+  function renderHistorico() {
+    const list = Object.values(planes).filter(haPasado).sort(function (a, b) { return fechaClavePlan(b) - fechaClavePlan(a); });
+    let html = renderTopbar('Histórico', { back: 'home' });
+    html += '<div class="content">';
+    if (list.length === 0) {
+      html += '<div class="empty-state">' + icon('history', { size: 46, style: 'width:46px;height:46px;stroke:var(--border)' }) +
+        '<h3>Sin planes pasados</h3><p>Cuando la fecha de un plan quede atrás, aparecerá aquí solo, para que el inicio se quede con lo que está por venir.</p></div>';
+    } else {
+      list.forEach(function (p) { html += historicoCard(p); });
+    }
+    html += '</div>';
     return html;
   }
 
@@ -1014,14 +1109,38 @@
     return html;
   }
 
+  function renderComentarios(plan) {
+    const lista = (plan.comentarios || []).slice().sort(function (a, b) { return (a.creadoEn || 0) - (b.creadoEn || 0); });
+    let html = '<div class="section-label">Comentarios</div>';
+    if (lista.length === 0) {
+      html += '<div class="meta-text" style="padding:4px 2px">Todavía no hay comentarios. Escribe algo para rematar detalles del plan.</div>';
+    } else {
+      html += '<div style="display:flex; flex-direction:column; gap:8px">';
+      lista.forEach(function (c) {
+        html += '<div class="comment-row">' +
+          '<div class="comment-head"><div class="avatar sm">' + esc(initials(nombreDe(c.autor))) + '</div>' +
+          '<div class="comment-author">' + esc(nombreDe(c.autor)) + '</div>' +
+          '<div class="comment-time">' + esc(formatDateTime(c.creadoEn)) + '</div></div>' +
+          '<div class="comment-text">' + esc(c.texto) + '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div class="comment-composer"><input id="c-texto" placeholder="Escribe un comentario..." onkeydown="if(event.key===\'Enter\'){ event.preventDefault(); KApp.enviarComentario(planes[\'' + plan.id + '\']); }" />' +
+      '<button type="button" class="comment-send" ' + (enviandoComentario ? 'disabled' : '') + ' onclick="KApp.enviarComentario(planes[\'' + plan.id + '\'])">' + (enviandoComentario ? '…' : 'Enviar') + '</button></div>';
+    return html;
+  }
+
   function renderDetail() {
     const plan = planes[currentPlanId];
     if (!plan) return renderHome();
     const isConfirmado = plan.estado === 'confirmado';
     const soyCreador = me && plan.creadoPor === me.id;
     const apuntado = me && (plan.apuntados || []).includes(me.id);
+    const pasado = haPasado(plan);
     let html = renderTopbar(plan.titulo, { back: 'home' });
     html += '<div class="content">';
+    if (pasado) html += '<div class="badge badge-historico" style="align-self:flex-start">' + icon('history', { size: 12, style: 'display:inline;vertical-align:-2px' }) + ' Plan pasado</div>';
     html += '<div class="infolist">';
     if (plan.sitio) html += '<div class="inforow">' + icon('link', { size: 16 }) + '<b>' + esc(plan.sitio) + '</b></div>';
     if (plan.precio) html += '<div class="inforow">' + icon('clock', { size: 16 }) + '≈ <b>' + money(plan.precio) + '</b> por persona</div>';
@@ -1063,6 +1182,8 @@
     }
 
     html += '<div class="section-label">Apuntados (' + (plan.apuntados || []).length + ')</div>' + avatarStack(plan.apuntados || [], 8);
+
+    html += renderComentarios(plan);
 
     html += '<div class="section-label" style="display:flex; align-items:center; justify-content:space-between">Itinerario<button class="ghost-btn" style="padding:6px 12px" onclick="KApp.openItinerarioForm(planes[\'' + plan.id + '\'])">' + icon('plus', { size: 13 }) + ' Añadir</button></div>';
     const itinerario = sortItinerario(plan.itinerario);
@@ -1348,6 +1469,7 @@
     else if (view === 'detail') html = renderDetail();
     else if (view === 'calendar') html = renderCalendar();
     else if (view === 'gastos') html = renderGastos();
+    else if (view === 'historico') html = renderHistorico();
     else html = renderHome();
     root.innerHTML = html;
   }
@@ -1421,6 +1543,7 @@
     openItinerarioForm: openItinerarioForm, closeItinerarioForm: closeItinerarioForm,
     guardarItinerarioItem: guardarItinerarioItem, eliminarItinerarioItem: eliminarItinerarioItem,
     seleccionarFoto: seleccionarFoto, onFotoSeleccionada: onFotoSeleccionada, eliminarFoto: eliminarFoto,
+    enviarComentario: enviarComentario,
     mostrarInfoDia: mostrarInfoDia, cerrarInfoDia: cerrarInfoDia, refrescar: refrescar,
     formDraft: formDraft, gastoDraft: gastoDraft, itinerarioDraft: itinerarioDraft, render: render,
     get monthOffset() { return monthOffset; }, set monthOffset(v) { monthOffset = v; },
