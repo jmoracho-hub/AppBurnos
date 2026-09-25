@@ -1360,7 +1360,7 @@
       html += '</div>';
     }
 
-    const list = Object.values(planes).slice().sort(function (a, b) {
+    const list = Object.values(planes).filter(function (p) { return !haPasado(p); }).sort(function (a, b) {
       function keyOf(p) {
         if (p.estado === 'confirmado') { const f = (p.fechas || []).find(function (x) { return x.id === p.fechaConfirmadaId; }); return f ? parseISODate(f.fecha).getTime() : Infinity; }
         return (p.fechas || []).reduce(function (min, f) { return Math.min(min, parseISODate(f.fecha).getTime()); }, Infinity);
